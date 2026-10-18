@@ -1,0 +1,6 @@
+{
+  "name": "HighRoller Luxe Casino",
+  "description": "High-contrast Philippine Peso (₱) casino suite featuring Slots, Blackjack, European Roulette, and Texas Hold'em Poker with real-time chip tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

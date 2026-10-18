@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with casino chip balances, stats, and VIP tier",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "User auth UID" },
+        "email": { "type": "string", "description": "User Gmail address" },
+        "username": { "type": "string", "description": "Display name" },
+        "avatar": { "type": "string", "description": "User avatar emoji or icon" },
+        "chips": { "type": "number", "description": "Current chip balance" },
+        "vipTier": { "type": "string", "description": "VIP level tier" },
+        "totalWon": { "type": "number", "description": "All time total chips won" },
+        "totalLost": { "type": "number", "description": "All time total chips lost" },
+        "gamesPlayed": { "type": "number", "description": "Total rounds and hands played" },
+        "biggestWin": { "type": "number", "description": "Largest single win" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Profile creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["id", "email", "username", "chips", "vipTier"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Real-time ledger entry for casino chip changes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Transaction identifier" },
+        "userId": { "type": "string", "description": "Owner user UID" },
+        "game": { "type": "string", "description": "Game type: Slots, Blackjack, Poker, Bonus, or Cashier" },
+        "amount": { "type": "number", "description": "Amount credited or debited" },
+        "balanceAfter": { "type": "number", "description": "Chip balance after transaction" },
+        "description": { "type": "string", "description": "Transaction summary note" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp" }
+      },
+      "required": ["id", "userId", "game", "amount", "balanceAfter", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Private user account and chip tracking profile"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Real-time user transaction ledger records"
+    }
+  }
+}
