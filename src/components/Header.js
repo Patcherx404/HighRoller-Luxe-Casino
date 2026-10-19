@@ -204,7 +204,7 @@ export default function Header({ balance }) {
                 whiteSpace: "nowrap",
               }}
             >
-              🪙 {formatPHP(chips || 10000)}
+              🪙 {formatPHP(typeof chips === 'number' ? chips : 0)}
             </Typography>
           </Box>
 
@@ -274,7 +274,7 @@ export default function Header({ balance }) {
             {firebaseUser ? "PRIVATE ACCOUNT BALANCE (PHP)" : "PUBLIC DEMO BALANCE (PHP)"}
           </Typography>
           <Typography variant="h6" sx={{ fontWeight: 900, color: "#fbbf24", fontFamily: "monospace" }}>
-            {formatPHP(chips || 10000)}
+            {formatPHP(typeof chips === 'number' ? chips : 0)}
           </Typography>
           <Typography variant="caption" sx={{ color: firebaseUser ? "#34d399" : "#38bdf8", fontWeight: 700 }}>
             {firebaseUser ? `Synced to ${firebaseUser.email}` : "Guest Mode • Sign in to save private balance"}

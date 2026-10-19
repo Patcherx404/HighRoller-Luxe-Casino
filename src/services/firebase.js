@@ -81,13 +81,13 @@ export const signInWithGoogle = async () => {
       try {
         const snap = await getDoc(userDocRef);
         if (!snap.exists()) {
-          // Initial starting chips: 10,000 for new player
+          // Initial starting private balance: ₱0 for new player
           await setDoc(userDocRef, {
             id: user.uid,
             email: user.email || '',
             username: user.displayName || user.email?.split('@')[0] || 'High Roller',
             avatar: user.photoURL || '👑',
-            chips: 10000,
+            chips: 0,
             vipTier: 'Bronze',
             totalWon: 0,
             totalLost: 0,

@@ -100,8 +100,9 @@ export const FirebaseCasinoProvider = ({ children }) => {
           (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
-              // Sync strictly to the authenticated user's private balance
-              setChips(Number(data.chips) ?? PUBLIC_DEMO_CHIPS);
+              // Sync strictly to the authenticated user's private balance (defaults to 0)
+              const userBalance = typeof data.chips === 'number' ? data.chips : (Number(data.chips) || 0);
+              setChips(userBalance);
               setStats({
                 vipTier: data.vipTier || 'Bronze',
                 totalWon: Number(data.totalWon) || 0,
@@ -110,13 +111,13 @@ export const FirebaseCasinoProvider = ({ children }) => {
                 biggestWin: Number(data.biggestWin) || 0,
               });
             } else {
-              // Create user record in Firestore if not present
+              // Create user record in Firestore if not present - starts with 0 PRIVATE BALANCE
               const initialData = {
                 id: user.uid,
                 email: user.email || '',
                 username: user.displayName || user.email?.split('@')[0] || 'High Roller',
                 avatar: user.photoURL || '👑',
-                chips: PUBLIC_DEMO_CHIPS,
+                chips: 0,
                 vipTier: 'Bronze',
                 totalWon: 0,
                 totalLost: 0,
