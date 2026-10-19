@@ -35,6 +35,7 @@ import Games from './components/Games';
 import SlotsGame from './components/slots/SlotsGame';
 import BlackjackGame from './components/blackjack/BlackjackGame';
 import PokerDashboard from './components/poker/PokerDashboard';
+import BackgroundMusicPlayer from './components/BackgroundMusicPlayer';
 import { FirebaseCasinoProvider } from './context/FirebaseCasinoContext';
 
 const AppContent = () => {
@@ -204,6 +205,9 @@ const AppContent = () => {
           />
         </BottomNavigation>
       </Paper>
+
+      {/* Persistent Looping Jazz Casino Background Music */}
+      <BackgroundMusicPlayer />
     </Box>
   );
 };

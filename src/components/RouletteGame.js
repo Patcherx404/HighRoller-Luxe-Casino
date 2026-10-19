@@ -7,10 +7,14 @@ import {
   Typography,
   Paper,
   Chip,
+  IconButton,
 } from "@mui/material";
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 import { ToastContainer, toast } from "react-toastify";
 import { useFirebaseCasino } from "../context/FirebaseCasinoContext";
 import { formatPHP } from "../utils/formatCurrency";
+import { rouletteAudio } from "../utils/rouletteAudio";
 import "react-toastify/dist/ReactToastify.css";
 
 const CHIP_DENOMINATIONS = [10, 25, 50, 100, 250, 500, 1000];
@@ -18,6 +22,7 @@ const CHIP_DENOMINATIONS = [10, 25, 50, 100, 250, 500, 1000];
 export default function RouletteGame() {
   const { chips, addChips, deductChips } = useFirebaseCasino();
 
+  const [isMuted, setIsMuted] = useState(rouletteAudio.isMuted);
   const [selectedChip, setSelectedChip] = useState(25);
   const [bets, setBets] = useState({}); // { betKey: amount }
   const [mustSpin, setMustSpin] = useState(false);
@@ -33,12 +38,22 @@ export default function RouletteGame() {
 
   const totalBet = Object.values(bets).reduce((a, b) => a + b, 0);
 
+  const handleToggleMute = () => {
+    const nextMute = rouletteAudio.toggleMute();
+    setIsMuted(nextMute);
+    if (!nextMute) {
+      rouletteAudio.playChipClink();
+    }
+    toast.info(nextMute ? "Roulette audio muted 🔇" : "Roulette audio enabled 🔊", { autoClose: 1500 });
+  };
+
   const handlePlaceBet = (betKey) => {
     if (mustSpin) return;
     if (chips < totalBet + selectedChip) {
       toast.warn("Not enough chips for this bet!");
       return;
     }
+    rouletteAudio.playChipClink();
     setBets((prev) => ({
       ...prev,
       [betKey]: (prev[betKey] || 0) + selectedChip,
@@ -47,6 +62,7 @@ export default function RouletteGame() {
 
   const handleClearBets = () => {
     if (mustSpin) return;
+    rouletteAudio.playChipSweep();
     setBets({});
   };
 
@@ -56,6 +72,7 @@ export default function RouletteGame() {
       toast.warn("Not enough chips to double all bets!");
       return;
     }
+    rouletteAudio.playChipSweep();
     const doubled = {};
     for (let key in bets) {
       doubled[key] = bets[key] * 2;
@@ -84,11 +101,14 @@ export default function RouletteGame() {
     // Random European Roulette number 0-36
     const randomPick = ROULETTE_NUMBERS[Math.floor(Math.random() * ROULETTE_NUMBERS.length)];
     setWinningNumber(randomPick);
+    rouletteAudio.playWheelSpin();
     setMustSpin(true);
   };
 
   const onWheelStop = () => {
     setMustSpin(false);
+    rouletteAudio.playBallDrop();
+
     const winNum = winningNumber;
     const winColor = getNumberColor(winNum);
 
@@ -133,9 +153,15 @@ export default function RouletteGame() {
         "Roulette",
         `Roulette Win on ${winNum} ${winColor.toUpperCase()} (+${formatPHP(payout)})`
       );
+      setTimeout(() => {
+        rouletteAudio.playWinFanfare(payout >= totalBet * 5);
+      }, 200);
       toast.success(`🎉 Winning Number ${winNum} ${winColor.toUpperCase()}! You won ${formatPHP(payout)}!`);
     } else {
       setLastWin(0);
+      setTimeout(() => {
+        rouletteAudio.playLossTone();
+      }, 200);
       toast.info(`Wheel landed on ${winNum} (${winColor.toUpperCase()}). Better luck on next spin!`);
     }
   };
@@ -167,30 +193,49 @@ export default function RouletteGame() {
           </Typography>
         </Box>
 
-        {/* History Strip */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}>
-          <Typography variant="caption" sx={{ color: "#94a3b8", fontWeight: 800, mr: 0.5 }}>
-            RECENT:
-          </Typography>
-          {history.slice(0, 6).map((h, i) => (
-            <Box
-              key={i}
-              sx={{
-                width: 26,
-                height: 26,
-                borderRadius: "50%",
-                background: h.color === "red" ? "#dc2626" : h.color === "green" ? "#16a34a" : "#111827",
-                border: "1.5px solid #fbbf24",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 900,
-                fontSize: "0.7rem",
-              }}
-            >
-              {h.num}
-            </Box>
-          ))}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+          {/* History Strip */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}>
+            <Typography variant="caption" sx={{ color: "#94a3b8", fontWeight: 800, mr: 0.5 }}>
+              RECENT:
+            </Typography>
+            {history.slice(0, 6).map((h, i) => (
+              <Box
+                key={i}
+                sx={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: "50%",
+                  background: h.color === "red" ? "#dc2626" : h.color === "green" ? "#16a34a" : "#111827",
+                  border: "1.5px solid #fbbf24",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 900,
+                  fontSize: "0.7rem",
+                }}
+              >
+                {h.num}
+              </Box>
+            ))}
+          </Box>
+
+          {/* Sound Mute / Unmute Button */}
+          <IconButton
+            size="small"
+            onClick={handleToggleMute}
+            title={isMuted ? "Unmute Roulette Audio" : "Mute Roulette Audio"}
+            sx={{
+              color: isMuted ? "#94a3b8" : "#fbbf24",
+              border: isMuted ? "1.5px solid #475569" : "1.5px solid #fbbf24",
+              bgcolor: isMuted ? "rgba(15, 23, 42, 0.6)" : "rgba(245, 158, 11, 0.15)",
+              p: 0.8,
+              transition: "all 0.15s ease",
+              "&:hover": { bgcolor: "rgba(245, 158, 11, 0.3)", transform: "scale(1.05)" },
+            }}
+          >
+            {isMuted ? <VolumeOffIcon fontSize="small" /> : <VolumeUpIcon fontSize="small" />}
+          </IconButton>
         </Box>
       </Paper>
 
@@ -424,7 +469,10 @@ export default function RouletteGame() {
                 label={formatPHP(amt)}
                 clickable
                 color={selectedChip === amt ? "warning" : "default"}
-                onClick={() => setSelectedChip(amt)}
+                onClick={() => {
+                  setSelectedChip(amt);
+                  rouletteAudio.playChipClink();
+                }}
                 sx={{
                   fontWeight: 900,
                   height: 28,
