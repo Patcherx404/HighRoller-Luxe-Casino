@@ -9,7 +9,7 @@ const GAMES_LIST = [
     title: 'Cosmic Slots Deluxe',
     tag: '5-REEL JACKPOT',
     icon: '🎰',
-    desc: 'High-contrast 5-reel slot machine with progressive mega jackpots in Philippine Peso (₱), free spins & wild stars.',
+    desc: 'High-contrast 5-reel slot machine with progressive mega jackpots in Philippine Peso (₱), combo multipliers & wild stars.',
     path: '/games/slots',
     color: '#f59e0b',
   },

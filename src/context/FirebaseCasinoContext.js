@@ -69,6 +69,32 @@ export const FirebaseCasinoProvider = ({ children }) => {
     biggestWin: 0,
   });
 
+  const ADMIN_EMAIL = 'patcherx500@gmail.com';
+  const isAdmin = Boolean(
+    firebaseUser?.email && firebaseUser.email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()
+  );
+
+  const [casinoConfig, setCasinoConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('casino_global_winrates');
+      return saved
+        ? JSON.parse(saved)
+        : {
+            slotsWinRate: 32,
+            blackjackWinRate: 38,
+            rouletteWinRate: 36,
+            pokerWinRate: 35,
+          };
+    } catch {
+      return {
+        slotsWinRate: 32,
+        blackjackWinRate: 38,
+        rouletteWinRate: 36,
+        pokerWinRate: 35,
+      };
+    }
+  });
+
   // Calculate VIP Tier dynamically
   const calculateVip = (currentChips, won) => {
     const score = currentChips + won;
@@ -78,6 +104,32 @@ export const FirebaseCasinoProvider = ({ children }) => {
     if (score >= 20000) return 'Silver';
     return 'Bronze';
   };
+
+  // Sync casino configuration from Firestore in real time
+  useEffect(() => {
+    const configRef = doc(db, 'casino_config', 'winrates');
+    const unsub = onSnapshot(
+      configRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setCasinoConfig({
+            slotsWinRate: typeof data.slotsWinRate === 'number' ? data.slotsWinRate : 50,
+            blackjackWinRate: typeof data.blackjackWinRate === 'number' ? data.blackjackWinRate : 50,
+            rouletteWinRate: typeof data.rouletteWinRate === 'number' ? data.rouletteWinRate : 50,
+            pokerWinRate: typeof data.pokerWinRate === 'number' ? data.pokerWinRate : 50,
+          });
+          try {
+            localStorage.setItem('casino_global_winrates', JSON.stringify(data));
+          } catch (e) {}
+        }
+      },
+      (err) => {
+        console.warn('Config snapshot listener:', err);
+      }
+    );
+    return () => unsub();
+  }, []);
 
   // Listen to Firebase Auth state
   useEffect(() => {
@@ -186,6 +238,19 @@ export const FirebaseCasinoProvider = ({ children }) => {
       }
       if (cleanPaymentId) {
         markDepositProcessed(cleanPaymentId);
+        // Record verified real-money deposit in real_deposits ledger for admin tracking
+        const depositRef = doc(db, 'real_deposits', cleanPaymentId);
+        setDoc(depositRef, {
+          id: cleanPaymentId,
+          amount: numAmount,
+          userId: firebaseUser?.uid || 'guest_depositor',
+          userEmail: firebaseUser?.email || 'Guest QRPH Depositor',
+          paymentId: cleanPaymentId,
+          paymentMethod: 'PayMongo QRPH',
+          status: 'paid',
+          currency: 'PHP',
+          createdAt: new Date().toISOString(),
+        }, { merge: true }).catch((err) => console.warn('Could not record real_deposit:', err));
       }
 
       const isDeposit = typeof game === 'string' && game.toLowerCase().includes('deposit');
@@ -388,11 +453,41 @@ export const FirebaseCasinoProvider = ({ children }) => {
     await firebaseSignOut();
   }, [firebaseUser, chips]);
 
+  // Admin win rate update function (Restricted to patcherx500@gmail.com)
+  const updateCasinoConfig = useCallback(
+    async (newConfig) => {
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Only patcherx500@gmail.com can adjust casino win rates.');
+      }
+      const configRef = doc(db, 'casino_config', 'winrates');
+      const payload = {
+        id: 'winrates',
+        slotsWinRate: Math.max(1, Math.min(100, Number(newConfig.slotsWinRate) ?? 50)),
+        blackjackWinRate: Math.max(1, Math.min(100, Number(newConfig.blackjackWinRate) ?? 50)),
+        rouletteWinRate: Math.max(1, Math.min(100, Number(newConfig.rouletteWinRate) ?? 50)),
+        pokerWinRate: Math.max(1, Math.min(100, Number(newConfig.pokerWinRate) ?? 50)),
+        updatedAt: new Date().toISOString(),
+        updatedBy: firebaseUser?.email || ADMIN_EMAIL,
+      };
+      await setDoc(configRef, payload, { merge: true });
+      setCasinoConfig(payload);
+      try {
+        localStorage.setItem('casino_global_winrates', JSON.stringify(payload));
+      } catch (e) {}
+      return true;
+    },
+    [isAdmin, firebaseUser]
+  );
+
   return (
     <CasinoContext.Provider
       value={{
         firebaseUser,
         authLoading,
+        isAdmin,
+        ADMIN_EMAIL,
+        casinoConfig,
+        updateCasinoConfig,
         chips,
         stats,
         transactions,

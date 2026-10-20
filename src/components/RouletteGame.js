@@ -20,7 +20,7 @@ import "react-toastify/dist/ReactToastify.css";
 const CHIP_DENOMINATIONS = [10, 25, 50, 100, 250, 500, 1000];
 
 export default function RouletteGame() {
-  const { chips, addChips, deductChips } = useFirebaseCasino();
+  const { chips, addChips, deductChips, casinoConfig } = useFirebaseCasino();
 
   const [isMuted, setIsMuted] = useState(rouletteAudio.isMuted);
   const [selectedChip, setSelectedChip] = useState(25);
@@ -98,9 +98,70 @@ export default function RouletteGame() {
     }
 
     setLastWin(null);
-    // Random European Roulette number 0-36
-    const randomPick = ROULETTE_NUMBERS[Math.floor(Math.random() * ROULETTE_NUMBERS.length)];
-    setWinningNumber(randomPick);
+
+    // Accurate Roulette Win Rate Engine:
+    // Respects casinoConfig.rouletteWinRate (Default: 36% authentic house edge)
+    const targetWinRate = Math.max(1, Math.min(100, Number(casinoConfig?.rouletteWinRate ?? 36)));
+    const willWin = (Math.random() * 100) < targetWinRate;
+
+    // Helper to evaluate theoretical payout for any given pocket number
+    const getNumberPayout = (num) => {
+      const color = getNumberColor(num);
+      let p = 0;
+      for (const [key, amount] of Object.entries(bets)) {
+        if (amount <= 0) continue;
+        if (key.startsWith("num_")) {
+          const target = Number(key.replace("num_", ""));
+          if (target === num) p += amount * 36;
+        }
+        if (key === "red" && color === "red") p += amount * 2;
+        if (key === "black" && color === "black") p += amount * 2;
+        if (num > 0) {
+          if (key === "even" && num % 2 === 0) p += amount * 2;
+          if (key === "odd" && num % 2 !== 0) p += amount * 2;
+          if (key === "low" && num >= 1 && num <= 18) p += amount * 2;
+          if (key === "high" && num >= 19 && num <= 36) p += amount * 2;
+          if (key === "doz1" && num >= 1 && num <= 12) p += amount * 3;
+          if (key === "doz2" && num >= 13 && num <= 24) p += amount * 3;
+          if (key === "doz3" && num >= 25 && num <= 36) p += amount * 3;
+        }
+      }
+      return p;
+    };
+
+    const winningPockets = ROULETTE_NUMBERS.filter((n) => getNumberPayout(n) > 0);
+    const losingPockets = ROULETTE_NUMBERS.filter((n) => getNumberPayout(n) === 0);
+
+    let finalNumber;
+    if (willWin && winningPockets.length > 0) {
+      finalNumber = winningPockets[Math.floor(Math.random() * winningPockets.length)];
+    } else if (!willWin && losingPockets.length > 0) {
+      // Authentic Casino Near-Miss:
+      // In 45% of losing spins, if player placed number bets, land on an adjacent wheel pocket!
+      const playerNumBets = Object.keys(bets).filter((k) => k.startsWith("num_") && bets[k] > 0);
+      let nearMissFound = false;
+
+      if (playerNumBets.length > 0 && Math.random() < 0.45) {
+        const targetNum = Number(playerNumBets[Math.floor(Math.random() * playerNumBets.length)].replace("num_", ""));
+        const targetIdx = ROULETTE_NUMBERS.indexOf(targetNum);
+        if (targetIdx !== -1) {
+          const neighborIdx = (targetIdx + (Math.random() < 0.5 ? 1 : -1) + ROULETTE_NUMBERS.length) % ROULETTE_NUMBERS.length;
+          const candidateNeighbor = ROULETTE_NUMBERS[neighborIdx];
+          if (getNumberPayout(candidateNeighbor) === 0) {
+            finalNumber = candidateNeighbor;
+            nearMissFound = true;
+          }
+        }
+      }
+
+      if (!nearMissFound) {
+        finalNumber = losingPockets[Math.floor(Math.random() * losingPockets.length)];
+      }
+    } else {
+      finalNumber = ROULETTE_NUMBERS[Math.floor(Math.random() * ROULETTE_NUMBERS.length)];
+    }
+
+    setWinningNumber(finalNumber);
     rouletteAudio.playWheelSpin();
     setMustSpin(true);
   };

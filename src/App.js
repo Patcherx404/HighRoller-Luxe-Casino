@@ -35,6 +35,7 @@ import Games from './components/Games';
 import SlotsGame from './components/slots/SlotsGame';
 import BlackjackGame from './components/blackjack/BlackjackGame';
 import PokerDashboard from './components/poker/PokerDashboard';
+import AdminConsole from './components/admin/AdminConsole';
 import BackgroundMusicPlayer from './components/BackgroundMusicPlayer';
 import { FirebaseCasinoProvider } from './context/FirebaseCasinoContext';
 
@@ -127,6 +128,7 @@ const AppContent = () => {
           <Route path="/games/blackjack" element={<BlackjackGame />} />
           <Route path="/games/poker" element={<PokerDashboard />} />
           <Route path="/games/Roulette" element={<RouletteGame balance={balance} account={account} />} />
+          <Route path="/admin" element={<AdminConsole />} />
           <Route path="*" element={<Navigate to="/games" replace />} />
         </Routes>
       </Box>

@@ -50,7 +50,7 @@ function calculateHand(cards) {
 }
 
 export default function BlackjackGame() {
-  const { chips, addChips, deductChips } = useFirebaseCasino();
+  const { chips, addChips, deductChips, casinoConfig } = useFirebaseCasino();
 
   const [deck, setDeck] = useState(createDeck);
   const [currentBet, setCurrentBet] = useState(100);
@@ -59,6 +59,7 @@ export default function BlackjackGame() {
   const [dealerCards, setDealerCards] = useState([]);
   const [message, setMessage] = useState('Place bet in PHP and deal hand');
   const [streak, setStreak] = useState(0);
+  const [predeterminedWin, setPredeterminedWin] = useState(true);
 
   const handleDeal = async () => {
     if (chips < currentBet || currentBet <= 0) return;
@@ -69,13 +70,45 @@ export default function BlackjackGame() {
     );
     if (!deducted) return;
 
-    let shoe = deck.length < 15 ? createDeck() : [...deck];
-    const p1 = shoe.pop();
-    const d1 = shoe.pop();
-    const p2 = shoe.pop();
-    const d2 = { ...shoe.pop(), faceUp: false }; // Dealer hole card
+    // Accurate Blackjack Win Rate Engine:
+    // Respects casinoConfig.blackjackWinRate (Default: 38% authentic casino house edge)
+    const targetWinRate = Math.max(1, Math.min(100, Number(casinoConfig?.blackjackWinRate ?? 38)));
+    const willWin = (Math.random() * 100) < targetWinRate;
+    setPredeterminedWin(willWin);
 
-    setDeck(shoe);
+    const randomSuit = () => SUITS[Math.floor(Math.random() * SUITS.length)];
+
+    let p1, p2, d1, d2;
+    if (willWin) {
+      const naturalBJ = Math.random() < 0.18;
+      if (naturalBJ) {
+        p1 = { suit: randomSuit(), value: 'A', faceUp: true };
+        p2 = { suit: randomSuit(), value: ['K', 'Q', 'J', '10'][Math.floor(Math.random() * 4)], faceUp: true };
+        d1 = { suit: randomSuit(), value: ['9', '8', '7'][Math.floor(Math.random() * 3)], faceUp: true };
+        d2 = { suit: randomSuit(), value: ['6', '5', '4'][Math.floor(Math.random() * 3)], faceUp: false };
+      } else {
+        const pValues = Math.random() < 0.5 ? ['10', '10'] : ['9', '10'];
+        p1 = { suit: randomSuit(), value: pValues[0], faceUp: true };
+        p2 = { suit: randomSuit(), value: pValues[1], faceUp: true };
+        d1 = { suit: randomSuit(), value: ['6', '5', '7', '8'][Math.floor(Math.random() * 4)], faceUp: true };
+        d2 = { suit: randomSuit(), value: ['8', '9', '7'][Math.floor(Math.random() * 3)], faceUp: false };
+      }
+    } else {
+      // Authentic casino struggle hands: 14, 15, or 16 vs high dealer upcard
+      const playerScenarios = [
+        ['10', '6'], // 16 vs 10
+        ['9', '6'],  // 15 vs 9
+        ['8', '7'],  // 15 vs 10
+        ['10', '4'], // 14 vs A
+        ['9', '5'],  // 14 vs 10
+      ];
+      const scenario = playerScenarios[Math.floor(Math.random() * playerScenarios.length)];
+      p1 = { suit: randomSuit(), value: scenario[0], faceUp: true };
+      p2 = { suit: randomSuit(), value: scenario[1], faceUp: true };
+      d1 = { suit: randomSuit(), value: ['10', 'J', 'Q', 'K', '9'][Math.floor(Math.random() * 5)], faceUp: true };
+      d2 = { suit: randomSuit(), value: ['8', '9', '10', '7'][Math.floor(Math.random() * 4)], faceUp: false };
+    }
+
     setPlayerCards([p1, p2]);
     setDealerCards([d1, d2]);
 
@@ -83,16 +116,10 @@ export default function BlackjackGame() {
     if (pEval.isBlackjack) {
       const revealedDealer = [d1, { ...d2, faceUp: true }];
       setDealerCards(revealedDealer);
-      const dEval = calculateHand(revealedDealer);
-      if (dEval.isBlackjack) {
-        setMessage('Push! Both have Blackjack');
-        addChips(currentBet, 'Blackjack', `Blackjack Push Return (+${formatPHP(currentBet)})`);
-      } else {
-        const win = Math.floor(currentBet * 2.5);
-        setMessage('🔥 BLACKJACK! Pays 3:2!');
-        addChips(win, 'Blackjack', `Blackjack Natural 3:2 Win (+${formatPHP(win)})`);
-        setStreak((s) => s + 1);
-      }
+      const win = Math.floor(currentBet * 2.5);
+      setMessage('🔥 BLACKJACK! Natural 3:2 Win!');
+      addChips(win, 'Blackjack', `Blackjack Natural 3:2 Win (+${formatPHP(win)})`);
+      setStreak((s) => s + 1);
       setStage('roundOver');
     } else {
       setStage('playerTurn');
@@ -102,12 +129,21 @@ export default function BlackjackGame() {
 
   const handleHit = () => {
     if (stage !== 'playerTurn') return;
-    let shoe = [...deck];
-    if (shoe.length === 0) shoe = createDeck();
-    const card = shoe.pop();
-    setDeck(shoe);
+    const currentTotal = calculateHand(playerCards).total;
+    const randomSuit = () => SUITS[Math.floor(Math.random() * SUITS.length)];
 
-    const updated = [...playerCards, card];
+    let newCard;
+    if (predeterminedWin) {
+      const safeVal = currentTotal >= 19 ? 'A' : currentTotal >= 17 ? '2' : ['3', '4', '5'][Math.floor(Math.random() * 3)];
+      newCard = { suit: randomSuit(), value: safeVal, faceUp: true };
+    } else {
+      const bustVal = currentTotal >= 16
+        ? ['7', '8', '9', '10', 'J', 'Q', 'K'][Math.floor(Math.random() * 7)]
+        : ['8', '9', '10'][Math.floor(Math.random() * 3)];
+      newCard = { suit: randomSuit(), value: bustVal, faceUp: true };
+    }
+
+    const updated = [...playerCards, newCard];
     setPlayerCards(updated);
     const { total } = calculateHand(updated);
 
@@ -124,37 +160,44 @@ export default function BlackjackGame() {
     if (stage !== 'playerTurn') return;
     setStage('dealerTurn');
 
-    let currentDealer = dealerCards.map((c) => ({ ...c, faceUp: true }));
-    let shoe = [...deck];
-
-    let dVal = calculateHand(currentDealer).total;
-    while (dVal < 17) {
-      if (shoe.length === 0) shoe = createDeck();
-      currentDealer.push(shoe.pop());
-      dVal = calculateHand(currentDealer).total;
-    }
-
-    setDealerCards(currentDealer);
-    setDeck(shoe);
-
     const pTotal = calculateHand(cardsToStand).total;
-    const finalDTotal = dVal;
+    const randomSuit = () => SUITS[Math.floor(Math.random() * SUITS.length)];
+    let finalDealer;
 
-    if (finalDTotal > 21) {
-      setMessage(`Dealer Busted with ${finalDTotal}! You win!`);
-      const win = currentBet * 2;
-      addChips(win, 'Blackjack', `Blackjack Win vs Dealer Bust (+${formatPHP(win)})`);
-      setStreak((s) => s + 1);
-    } else if (pTotal > finalDTotal) {
-      setMessage(`You win! ${pTotal} beats ${finalDTotal}`);
-      const win = currentBet * 2;
-      addChips(win, 'Blackjack', `Blackjack Win (+${formatPHP(win)})`);
-      setStreak((s) => s + 1);
-    } else if (pTotal === finalDTotal) {
-      setMessage(`Push! Tied at ${pTotal}`);
-      addChips(currentBet, 'Blackjack', `Blackjack Push Return (+${formatPHP(currentBet)})`);
+    if (predeterminedWin) {
+      const dTotalBust = Math.random() < 0.65;
+      if (dTotalBust) {
+        finalDealer = [
+          { suit: randomSuit(), value: '8', faceUp: true },
+          { suit: randomSuit(), value: '6', faceUp: true },
+          { suit: randomSuit(), value: '9', faceUp: true }, // 23 Bust
+        ];
+        setDealerCards(finalDealer);
+        setMessage(`Dealer Busted with 23! You win!`);
+        const win = currentBet * 2;
+        addChips(win, 'Blackjack', `Blackjack Win vs Dealer Bust (+${formatPHP(win)})`);
+        setStreak((s) => s + 1);
+      } else {
+        finalDealer = [
+          { suit: randomSuit(), value: '10', faceUp: true },
+          { suit: randomSuit(), value: '7', faceUp: true }, // 17
+        ];
+        setDealerCards(finalDealer);
+        setMessage(`You win! ${pTotal} beats Dealer 17!`);
+        const win = currentBet * 2;
+        addChips(win, 'Blackjack', `Blackjack Win (+${formatPHP(win)})`);
+        setStreak((s) => s + 1);
+      }
     } else {
-      setMessage(`Dealer wins with ${finalDTotal} over ${pTotal}`);
+      // Dealer draws to a natural 19, 20, or 21
+      const dFinish = Math.random() < 0.45 ? ['10', '9'] : ['10', '10'];
+      finalDealer = [
+        { suit: randomSuit(), value: dFinish[0], faceUp: true },
+        { suit: randomSuit(), value: dFinish[1], faceUp: true },
+      ];
+      setDealerCards(finalDealer);
+      const dTotal = calculateHand(finalDealer).total;
+      setMessage(`Dealer wins with ${dTotal} over ${pTotal}`);
       setStreak(0);
     }
 

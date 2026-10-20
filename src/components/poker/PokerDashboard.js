@@ -26,7 +26,7 @@ const BOT_PLAYERS = [
 ];
 
 export default function PokerDashboard() {
-  const { chips, addChips, deductChips } = useFirebaseCasino();
+  const { chips, addChips, deductChips, casinoConfig } = useFirebaseCasino();
   const [activeTable, setActiveTable] = useState(null);
 
   // Table gameplay state
@@ -82,9 +82,23 @@ export default function PokerDashboard() {
       logMessage(`River dealt: [${river.value + river.suit}]`);
     } else if (stage === 'river') {
       setStage('showdown');
-      const win = pot + 800;
-      logMessage(`🏆 SHOWDOWN: You won the pot with Ace-High Straight! (+${formatPHP(win)})`);
-      addChips(win, 'Poker', `Poker Showdown Pot Win (+${formatPHP(win)})`);
+      // Accurate Poker Win Rate Engine:
+      // Respects casinoConfig.pokerWinRate (Default: 35% house edge)
+      const targetWinRate = Math.max(1, Math.min(100, Number(casinoConfig?.pokerWinRate ?? 35)));
+      const willWin = (Math.random() * 100) < targetWinRate;
+
+      if (willWin) {
+        const win = pot + 800;
+        const winHands = ['Ace-High Straight', 'Flush Ace-High', 'Three of a Kind Aces', 'Kings Full of Jacks'];
+        const hand = winHands[Math.floor(Math.random() * winHands.length)];
+        logMessage(`🏆 SHOWDOWN: You won the pot with ${hand}! (+${formatPHP(win)})`);
+        addChips(win, 'Poker', `Poker Showdown Pot Win (+${formatPHP(win)})`);
+      } else {
+        const winnerBot = BOT_PLAYERS[Math.floor(Math.random() * BOT_PLAYERS.length)].name;
+        const botHands = ['Full House (Kings over Tens)', 'Nut Flush (Ace-High)', 'Set of Queens on River', 'Two Pair (Aces & Kings)'];
+        const botHand = botHands[Math.floor(Math.random() * botHands.length)];
+        logMessage(`❌ SHOWDOWN: ${winnerBot} called down and won with ${botHand}!`);
+      }
     }
   };
 

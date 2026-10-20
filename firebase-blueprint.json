@@ -34,6 +34,38 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp" }
       },
       "required": ["id", "userId", "game", "amount", "balanceAfter", "createdAt"]
+    },
+    "CasinoConfig": {
+      "title": "CasinoConfig",
+      "description": "Game winrates and RTP configurations managed by administrator",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Config ID (e.g. winrates)" },
+        "slotsWinRate": { "type": "number", "description": "Slots win hit frequency (0-100)" },
+        "blackjackWinRate": { "type": "number", "description": "Blackjack player win probability (0-100)" },
+        "rouletteWinRate": { "type": "number", "description": "Roulette lucky spin win rate (0-100)" },
+        "pokerWinRate": { "type": "number", "description": "Poker winning hand odds (0-100)" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp" },
+        "updatedBy": { "type": "string", "description": "Admin email" }
+      },
+      "required": ["id", "slotsWinRate", "blackjackWinRate", "rouletteWinRate", "pokerWinRate"]
+    },
+    "RealDeposit": {
+      "title": "RealDeposit",
+      "description": "Verified real-money deposits made via payment gateway (PayMongo QRPH)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique deposit ID" },
+        "amount": { "type": "number", "description": "Real money amount in Philippine Peso (PHP)" },
+        "userId": { "type": "string", "description": "User ID who deposited" },
+        "userEmail": { "type": "string", "description": "User email or identifier" },
+        "paymentId": { "type": "string", "description": "PayMongo payment ID" },
+        "paymentMethod": { "type": "string", "description": "Payment method (PayMongo QRPH)" },
+        "status": { "type": "string", "description": "Deposit status (paid)" },
+        "currency": { "type": "string", "description": "Currency code (PHP)" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of deposit" }
+      },
+      "required": ["id", "amount", "paymentId", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -44,6 +76,14 @@
     "/users/{userId}/transactions/{transactionId}": {
       "schema": "Transaction",
       "description": "Real-time user transaction ledger records"
+    },
+    "/casino_config/{configId}": {
+      "schema": "CasinoConfig",
+      "description": "Game win rate controls restricted to administrator patcherx500@gmail.com"
+    },
+    "/real_deposits/{depositId}": {
+      "schema": "RealDeposit",
+      "description": "Real money deposits ledger viewable by administrator patcherx500@gmail.com"
     }
   }
 }

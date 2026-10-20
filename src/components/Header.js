@@ -21,6 +21,7 @@ import CasinoIcon from "@mui/icons-material/Casino";
 import StyleIcon from "@mui/icons-material/Style";
 import PieChartIcon from "@mui/icons-material/PieChart";
 import HomeIcon from "@mui/icons-material/Home";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import { useFirebaseCasino } from "../context/FirebaseCasinoContext";
 import { formatPHP } from "../utils/formatCurrency";
 
@@ -34,7 +35,7 @@ const headersData = [
 ];
 
 export default function Header({ balance }) {
-  const { firebaseUser, chips, signInWithGoogle, logOut } = useFirebaseCasino();
+  const { firebaseUser, chips, signInWithGoogle, logOut, isAdmin } = useFirebaseCasino();
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -228,6 +229,30 @@ export default function Header({ balance }) {
             Deposit
           </Button>
 
+          {/* Admin Console Button (Restricted exclusively to patcherx500@gmail.com) */}
+          {isAdmin && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<AdminPanelSettingsIcon sx={{ fontSize: { xs: 15, sm: 17 } }} />}
+              onClick={() => navigate("/admin")}
+              sx={{
+                fontWeight: 900,
+                fontSize: { xs: "0.7rem", sm: "0.75rem" },
+                borderRadius: 2,
+                px: { xs: 1, sm: 1.4 },
+                py: 0.5,
+                textTransform: "none",
+                bgcolor: "#dc2626",
+                color: "#fff",
+                boxShadow: "0 0 12px rgba(220, 38, 38, 0.5)",
+                "&:hover": { bgcolor: "#b91c1c" },
+              }}
+            >
+              Admin
+            </Button>
+          )}
+
           {/* Google Login / Avatar */}
           <LoginButton />
         </Box>
@@ -310,6 +335,37 @@ export default function Header({ balance }) {
             </MenuItem>
           </Link>
         ))}
+
+        {/* Administrator Access Link (Restricted to patcherx500@gmail.com) */}
+        {isAdmin && (
+          <Link
+            component={RouterLink}
+            to="/admin"
+            onClick={handleDrawerClose}
+            sx={{ textDecoration: "none", color: "inherit" }}
+          >
+            <MenuItem
+              sx={{
+                borderRadius: 2,
+                py: 1.2,
+                mt: 1,
+                mb: 0.5,
+                gap: 1.5,
+                fontWeight: 900,
+                fontSize: "0.95rem",
+                bgcolor: "rgba(220, 38, 38, 0.15)",
+                border: "1.5px solid #ef4444",
+                color: "#f87171",
+                "&:hover": { bgcolor: "rgba(220, 38, 38, 0.3)", color: "#fff" },
+              }}
+            >
+              <Box sx={{ color: "#ef4444", display: "flex", alignItems: "center" }}>
+                <AdminPanelSettingsIcon />
+              </Box>
+              Admin Winrate Console
+            </MenuItem>
+          </Link>
+        )}
 
         <Divider sx={{ borderColor: "#334155", my: 2 }} />
 

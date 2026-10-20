@@ -16,6 +16,10 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == 'patcherx500@gmail.com';
+    }
+
     function isValidId(id) {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -74,6 +78,21 @@ service cloud.firestore {
 
         allow update, delete: if false; // Transactions are immutable ledger records
       }
+    }
+
+    // Admin Casino Win Rate Configuration (Restricted write to patcherx500@gmail.com)
+    match /casino_config/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Real Money Deposits ledger (Only real payments, read restricted to admin patcherx500@gmail.com)
+    match /real_deposits/{depositId} {
+      allow read: if isAdmin();
+      allow create: if request.resource.data.amount is number &&
+                       request.resource.data.amount > 0 &&
+                       request.resource.data.status == 'paid';
+      allow update, delete: if false; // Immutable financial record
     }
   }
 }

@@ -19,11 +19,13 @@ import SensorsIcon from '@mui/icons-material/Sensors';
 import { useFirebaseCasino } from "../context/FirebaseCasinoContext";
 import { formatPHP } from "../utils/formatCurrency";
 import { generatePayMongoQR, checkPayMongoPaymentStatus } from "../services/paymongoService";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "../services/firebase";
 
 const PRESET_AMOUNTS = [1, 50, 100, 500, 1000, 2500];
 
 const BuyTokens = () => {
-  const { addChips } = useFirebaseCasino();
+  const { addChips, firebaseUser } = useFirebaseCasino();
   const [tokenAmount, setTokenAmount] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
   const [qrData, setQrData] = useState(null);
@@ -71,12 +73,32 @@ const BuyTokens = () => {
           }
 
           const credited = Number(checkResult.amount || qrData.amount || tokenAmount);
+          const payId = checkResult.paymentId || qrData.id || `pay_${Date.now()}`;
+
+          // 1. Credit chips to user account
           await addChipsRef.current(
             credited,
             "Deposit (PayMongo)",
-            `PayMongo QRPH Deposit (${formatPHP(credited)}) - ID: ${checkResult.paymentId || qrData.id}`,
-            checkResult.paymentId || qrData.id
+            `PayMongo QRPH Deposit (${formatPHP(credited)}) - ID: ${payId}`,
+            payId
           );
+
+          // 2. Record in immutable real-money deposits ledger for Admin Console
+          try {
+            await setDoc(doc(db, "real_deposits", payId), {
+              id: payId,
+              amount: credited,
+              userId: firebaseUser?.uid || "guest_depositor",
+              userEmail: firebaseUser?.email || "Guest QRPH Depositor",
+              paymentId: payId,
+              paymentMethod: "PayMongo QRPH",
+              status: "paid",
+              currency: "PHP",
+              createdAt: new Date().toISOString(),
+            }, { merge: true });
+          } catch (ledgerErr) {
+            console.warn("Real deposit ledger write error:", ledgerErr);
+          }
 
           setPaymentSuccess(true);
           setIsListening(false);
@@ -232,7 +254,7 @@ const BuyTokens = () => {
                   MERCHANT
                 </Typography>
                 <Typography variant="subtitle2" sx={{ color: '#fbbf24', fontWeight: 900 }}>
-                  {qrData.merchantName}
+                  LUXE CASINO
                 </Typography>
               </Box>
 

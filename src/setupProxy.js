@@ -116,7 +116,7 @@ module.exports = function (app) {
             transaction_amount: transactionAmountCentavos,
             amount: parsedAmount,
             currency: 'PHP',
-            merchant_name: 'HOTFASTPH',
+            merchant_name: 'LUXE CASINO',
             qr_image: qrImage,
             qr_string: nextAction?.code?.qr_string,
             created_at: attachJson.data?.attributes?.created_at || Math.floor(Date.now() / 1000),
