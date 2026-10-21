@@ -1,7 +1,9 @@
 import React from 'react';
-import { Avatar, Grid, Typography, Box, Paper, Button } from '@mui/material';
+import { Avatar, Grid, Typography, Box, Paper, Button, Chip } from '@mui/material';
 import { useNavigate } from 'react-router';
 import starImage from '../images/Gold-Star-PNG-Photos.png';
+import { useFirebaseCasino } from '../context/FirebaseCasinoContext';
+import { formatPHP } from '../utils/formatCurrency';
 
 const GAMES_LIST = [
   {
@@ -44,6 +46,7 @@ const GAMES_LIST = [
 
 const Games = () => {
   const navigate = useNavigate();
+  const { cosmicJackpot } = useFirebaseCasino();
 
   return (
     <Box sx={{ width: '100%', maxWidth: 1050, mx: 'auto', px: { xs: 1, sm: 2, md: 3 }, py: { xs: 1.5, sm: 3 } }}>
@@ -115,6 +118,22 @@ const Games = () => {
                 <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff', mb: 0.5, fontSize: { xs: '1.1rem', sm: '1.3rem' } }}>
                   {game.title}
                 </Typography>
+                {game.id === 'slots' && (
+                  <Box sx={{ mb: 1 }}>
+                    <Chip
+                      size="small"
+                      label={`✨ Live Jackpot: ${formatPHP(cosmicJackpot || 0)} (40% of Deposits)`}
+                      sx={{
+                        bgcolor: 'rgba(245, 158, 11, 0.2)',
+                        color: '#fbbf24',
+                        border: '1px solid #f59e0b',
+                        fontWeight: 900,
+                        fontSize: '0.72rem',
+                        height: 22,
+                      }}
+                    />
+                  </Box>
+                )}
                 <Typography variant="body2" sx={{ color: '#94a3b8', lineHeight: 1.4, fontSize: { xs: '0.8rem', sm: '0.85rem' } }}>
                   {game.desc}
                 </Typography>

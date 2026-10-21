@@ -86,9 +86,9 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Real Money Deposits ledger (Only real payments, read restricted to admin patcherx500@gmail.com)
+    // Real Money Deposits ledger (Readable for global 40% Cosmic Progressive Jackpot sync)
     match /real_deposits/{depositId} {
-      allow read: if isAdmin();
+      allow read: if true;
       allow create: if request.resource.data.amount is number &&
                        request.resource.data.amount > 0 &&
                        request.resource.data.status == 'paid';

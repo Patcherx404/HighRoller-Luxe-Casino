@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useFirebaseCasino } from '../../context/FirebaseCasinoContext';
 import { formatPHP } from '../../utils/formatCurrency';
 import { slotsAudio } from '../../utils/slotsAudio';
@@ -13,6 +14,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  Tooltip,
 } from '@mui/material';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import VolumeOffIcon from '@mui/icons-material/VolumeOff';
@@ -22,16 +24,88 @@ import AutoModeIcon from '@mui/icons-material/AutoMode';
 import FlashOnIcon from '@mui/icons-material/FlashOn';
 import FlashOffIcon from '@mui/icons-material/FlashOff';
 import BoltIcon from '@mui/icons-material/Bolt';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import StopIcon from '@mui/icons-material/Stop';
 
-// Cosmic Symbols & Multipliers
+// Cosmic Symbols & Multipliers - Redesigned to match Pragmatic Play Cosmic Clusters style
 const SYMBOLS = [
-  { id: 'wild', name: 'Cosmic Star', icon: '⭐', mult: { 3: 50, 4: 200, 5: 1000 }, color: '#fde047', isWild: true },
-  { id: 'crown', name: 'Crown', icon: '👑', mult: { 3: 30, 4: 150, 5: 600 }, color: '#fbbf24' },
-  { id: 'diamond', name: 'Diamond', icon: '💎', mult: { 3: 20, 4: 100, 5: 400 }, color: '#38bdf8' },
-  { id: 'seven', name: 'Lucky 7', icon: '7️⃣', mult: { 3: 15, 4: 75, 5: 300 }, color: '#ef4444' },
-  { id: 'bell', name: 'Cosmic Bell', icon: '🔔', mult: { 3: 10, 4: 50, 5: 200 }, color: '#f59e0b' },
-  { id: 'cherry', name: 'Cherry', icon: '🍒', mult: { 3: 5, 4: 20, 5: 100 }, color: '#f43f5e' },
-  { id: 'grape', name: 'Galaxy Grape', icon: '🍇', mult: { 3: 4, 4: 15, 5: 80 }, color: '#c084fc' },
+  {
+    id: 'wild',
+    name: 'Cosmic Star',
+    icon: '⭐',
+    mult: { 3: 50, 4: 200, 5: 1000 },
+    color: '#fde047',
+    bg: 'linear-gradient(135deg, rgba(253, 224, 71, 0.35) 0%, rgba(202, 138, 4, 0.25) 100%)',
+    border: '#fde047',
+    isWild: true,
+  },
+  {
+    id: 'alien',
+    name: 'Cosmic Alien',
+    icon: '👽',
+    mult: { 3: 35, 4: 160, 5: 750 },
+    color: '#4ade80',
+    bg: 'linear-gradient(135deg, rgba(74, 222, 128, 0.3) 0%, rgba(21, 128, 61, 0.2) 100%)',
+    border: '#22c55e',
+  },
+  {
+    id: 'ufo',
+    name: 'Saucer UFO',
+    icon: '🛸',
+    mult: { 3: 25, 4: 120, 5: 500 },
+    color: '#38bdf8',
+    bg: 'linear-gradient(135deg, rgba(56, 189, 248, 0.3) 0%, rgba(3, 105, 161, 0.2) 100%)',
+    border: '#0284c7',
+  },
+  {
+    id: 'satellite',
+    name: 'Orbital Probe',
+    icon: '🛰️',
+    mult: { 3: 20, 4: 90, 5: 350 },
+    color: '#fb923c',
+    bg: 'linear-gradient(135deg, rgba(251, 146, 60, 0.3) 0%, rgba(194, 65, 12, 0.2) 100%)',
+    border: '#ea580c',
+  },
+  {
+    id: 'ruby',
+    name: 'Ruby Diamond',
+    icon: '💎',
+    mult: { 3: 15, 4: 70, 5: 250 },
+    color: '#ef4444',
+    bg: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(185, 28, 28, 0.2) 100%)',
+    border: '#dc2626',
+  },
+  {
+    id: 'sapphire',
+    name: 'Blue Sapphire',
+    icon: '🔷',
+    mult: { 3: 10, 4: 50, 5: 180 },
+    color: '#60a5fa',
+    bg: 'linear-gradient(135deg, rgba(96, 165, 250, 0.3) 0%, rgba(29, 78, 216, 0.2) 100%)',
+    border: '#2563eb',
+  },
+  {
+    id: 'emerald',
+    name: 'Green Emerald',
+    icon: '🟢',
+    mult: { 3: 6, 4: 25, 5: 120 },
+    color: '#10b981',
+    bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.3) 0%, rgba(4, 120, 87, 0.2) 100%)',
+    border: '#059669',
+  },
+  {
+    id: 'amethyst',
+    name: 'Purple Gem',
+    icon: '🔮',
+    image: '/assets/aistudio/Vibrant_Purple_Crystal_Cluster_d06bd317.png',
+    mult: { 3: 4, 4: 15, 5: 80 },
+    color: '#c084fc',
+    bg: 'linear-gradient(135deg, rgba(192, 132, 252, 0.35) 0%, rgba(126, 34, 206, 0.25) 100%)',
+    border: '#9333ea',
+  },
 ];
 
 // Available Line Bets: includes 1 peso!
@@ -47,27 +121,36 @@ const PAYLINE_DEFS = [
 ];
 
 export default function SlotsGame() {
-  const { chips, addChips, deductChips, casinoConfig } = useFirebaseCasino();
+  const navigate = useNavigate();
+  const {
+    chips,
+    addChips,
+    deductChips,
+    casinoConfig,
+    cosmicJackpot,
+    totalRealDeposits,
+  } = useFirebaseCasino();
 
   // Helper to pick a completely random symbol with authentic natural reel weights
   const getRandomSymbol = () => {
     const r = Math.random();
     if (r < 0.08) return SYMBOLS[0]; // Wild Star ⭐
-    if (r < 0.20) return SYMBOLS[1]; // Crown 👑
-    if (r < 0.35) return SYMBOLS[2]; // Diamond 💎
-    if (r < 0.50) return SYMBOLS[3]; // Lucky 7 7️⃣
-    if (r < 0.65) return SYMBOLS[4]; // Bell 🔔
-    if (r < 0.82) return SYMBOLS[5]; // Cherry 🍒
-    return SYMBOLS[6]; // Grape 🍇
+    if (r < 0.18) return SYMBOLS[1]; // Alien 👽
+    if (r < 0.30) return SYMBOLS[2]; // UFO 🛸
+    if (r < 0.44) return SYMBOLS[3]; // Satellite 🛰️
+    if (r < 0.58) return SYMBOLS[4]; // Ruby Diamond 💎
+    if (r < 0.72) return SYMBOLS[5]; // Blue Sapphire 🔷
+    if (r < 0.86) return SYMBOLS[6]; // Green Emerald 🟢
+    return SYMBOLS[7]; // Purple Amethyst 🟣
   };
 
   // 5 columns x 3 rows grid
   const [grid, setGrid] = useState(() => [
-    [SYMBOLS[1], SYMBOLS[2], SYMBOLS[5]],
-    [SYMBOLS[3], SYMBOLS[0], SYMBOLS[6]],
-    [SYMBOLS[4], SYMBOLS[1], SYMBOLS[3]],
-    [SYMBOLS[6], SYMBOLS[4], SYMBOLS[2]],
-    [SYMBOLS[5], SYMBOLS[3], SYMBOLS[1]],
+    [SYMBOLS[1], SYMBOLS[4], SYMBOLS[6]],
+    [SYMBOLS[2], SYMBOLS[0], SYMBOLS[7]],
+    [SYMBOLS[4], SYMBOLS[1], SYMBOLS[2]],
+    [SYMBOLS[7], SYMBOLS[3], SYMBOLS[5]],
+    [SYMBOLS[6], SYMBOLS[2], SYMBOLS[1]],
   ]);
 
   const [isSpinning, setIsSpinning] = useState(false);
@@ -81,10 +164,12 @@ export default function SlotsGame() {
   const [selectedLinesCount, setSelectedLinesCount] = useState(5); // 1, 3, or 5 lines
   const totalBet = betPerLine * selectedLinesCount;
 
-  // Win stats & Jackpot
+  // Win stats & Synced Progressive Jackpot (exact 40% of user real deposits)
   const [lastWin, setLastWin] = useState(0);
   const [winTitle, setWinTitle] = useState('');
-  const [jackpot, setJackpot] = useState(148920);
+
+  // Live Cosmic Progressive Jackpot: exactly 40% of all real money deposits from users (e.g. 40% of 120 = 48)
+  const displayJackpot = cosmicJackpot ?? (Math.round((totalRealDeposits || 0) * 0.40 * 100) / 100);
 
   // Consecutive Win Combo Multiplier
   const [comboMultiplier, setComboMultiplier] = useState(1);
@@ -92,6 +177,7 @@ export default function SlotsGame() {
   const [autoSpinCount, setAutoSpinCount] = useState(0);
   const [isMuted, setIsMuted] = useState(slotsAudio.isMuted);
   const [showPaytable, setShowPaytable] = useState(false);
+  const [astronautMood, setAstronautMood] = useState('idle'); // 'idle' | 'spinning' | 'win' | 'jackpot'
 
   const rollIntervalRef = useRef(null);
   const timeoutsRef = useRef([]);
@@ -102,14 +188,6 @@ export default function SlotsGame() {
       if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
       timeoutsRef.current.forEach(clearTimeout);
     };
-  }, []);
-
-  // Progressive jackpot ticker
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setJackpot((prev) => prev + Math.floor(Math.random() * 5) + 1);
-    }, 3500);
-    return () => clearInterval(timer);
   }, []);
 
   const handleToggleMute = () => {
@@ -128,6 +206,23 @@ export default function SlotsGame() {
       else break;
     }
     return { target, count, isWin: count >= 3 };
+  };
+
+  // Change line bet step (using - and + buttons)
+  const handleDecreaseBet = () => {
+    const idx = LINE_BETS.indexOf(betPerLine);
+    if (idx > 0) {
+      setBetPerLine(LINE_BETS[idx - 1]);
+      slotsAudio.playChipClick();
+    }
+  };
+
+  const handleIncreaseBet = () => {
+    const idx = LINE_BETS.indexOf(betPerLine);
+    if (idx < LINE_BETS.length - 1) {
+      setBetPerLine(LINE_BETS[idx + 1]);
+      slotsAudio.playChipClick();
+    }
   };
 
   // Main Spin Action
@@ -151,6 +246,7 @@ export default function SlotsGame() {
 
     slotsAudio.playSpinStart();
     setIsSpinning(true);
+    setAstronautMood('spinning');
     setLastWin(0);
     setWinTitle('');
     setWinningCells(new Set());
@@ -162,15 +258,11 @@ export default function SlotsGame() {
     timeoutsRef.current.forEach(clearTimeout);
     timeoutsRef.current = [];
 
-    // Realistic Real-Time Reel Rolling Animation:
-    // Cycles random symbols through the spinning reels every 65ms
+    // Realistic Real-Time Reel Rolling Animation
     if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
     rollIntervalRef.current = setInterval(() => {
       setGrid((prev) => {
-        return prev.map((col, cIdx) => {
-          // If this reel is still spinning, roll new random symbols down
-          return [getRandomSymbol(), getRandomSymbol(), getRandomSymbol()];
-        });
+        return prev.map(() => [getRandomSymbol(), getRandomSymbol(), getRandomSymbol()]);
       });
     }, isTurbo ? 45 : 65);
 
@@ -196,20 +288,18 @@ export default function SlotsGame() {
       if (!hasNaturalWin) {
         // Pick an active payline
         const luckyLine = activeLines[Math.floor(Math.random() * activeLines.length)];
-        // Lean towards moderate symbols (Cherry 5x, Bell 10x, 7 15x) for realistic payouts
         const rWeight = Math.random();
-        const luckySym = rWeight < 0.4 ? SYMBOLS[5] : rWeight < 0.7 ? SYMBOLS[4] : rWeight < 0.88 ? SYMBOLS[3] : rWeight < 0.96 ? SYMBOLS[2] : SYMBOLS[1];
+        const luckySym = rWeight < 0.4 ? SYMBOLS[6] : rWeight < 0.7 ? SYMBOLS[5] : rWeight < 0.88 ? SYMBOLS[4] : rWeight < 0.96 ? SYMBOLS[3] : SYMBOLS[2];
         const matchLen = Math.random() < 0.8 ? 3 : Math.random() < 0.95 ? 4 : 5;
 
         for (let i = 0; i < matchLen; i++) {
           const [c, r] = luckyLine.coords[i];
           finalGrid[c][r] = luckySym;
         }
-        // Break line at matchLen if < 5
         if (matchLen < 5) {
           const [c, r] = luckyLine.coords[matchLen];
           const diffSym = SYMBOLS.find((s) => s.id !== luckySym.id && !s.isWild);
-          finalGrid[c][r] = diffSym || SYMBOLS[6];
+          finalGrid[c][r] = diffSym || SYMBOLS[7];
         }
       }
     } else {
@@ -220,7 +310,7 @@ export default function SlotsGame() {
         if (match.isWin) {
           const [c, r] = line.coords[2];
           const nonMatching = SYMBOLS.find((s) => s.id !== match.target.id && !s.isWild);
-          finalGrid[c][r] = nonMatching || SYMBOLS[6];
+          finalGrid[c][r] = nonMatching || SYMBOLS[7];
         }
         match = checkLineMatch(finalGrid, line);
         if (match.isWin) {
@@ -231,22 +321,21 @@ export default function SlotsGame() {
       });
 
       // 2. In ~45% of losing spins, craft a subtle "Near-Miss" teaser on an active line
-      // (2 matching high-tier symbols on reels 1 & 2, while reel 3 stops on a neighboring symbol)
       if (Math.random() < 0.45) {
         const teaserLine = activeLines[Math.floor(Math.random() * activeLines.length)];
-        const teaserSym = Math.random() < 0.5 ? SYMBOLS[1] : SYMBOLS[2]; // Crown 👑 or Diamond 💎
+        const teaserSym = Math.random() < 0.5 ? SYMBOLS[1] : SYMBOLS[2]; // Alien 👽 or UFO 🛸
         const [c0, r0] = teaserLine.coords[0];
         const [c1, r1] = teaserLine.coords[1];
         const [c2, r2] = teaserLine.coords[2];
         finalGrid[c0][r0] = teaserSym;
         finalGrid[c1][r1] = teaserSym;
-        finalGrid[c2][r2] = SYMBOLS[4]; // 🔔 Bell barely misses!
+        finalGrid[c2][r2] = SYMBOLS[4]; // Ruby barely misses!
       }
     }
 
     // Staggered reel stop timing
-    const baseDelay = isTurbo ? 220 : 550;
-    const stepDelay = isTurbo ? 140 : 260;
+    const baseDelay = isTurbo ? 200 : 500;
+    const stepDelay = isTurbo ? 130 : 250;
 
     for (let reel = 0; reel < 5; reel++) {
       const t = setTimeout(() => {
@@ -270,7 +359,6 @@ export default function SlotsGame() {
 
         slotsAudio.playReelStop(reel);
 
-        // Turn off bounce snap
         const tb = setTimeout(() => {
           setReelsBouncing((prev) => {
             const next = [...prev];
@@ -280,7 +368,7 @@ export default function SlotsGame() {
         }, 280);
         timeoutsRef.current.push(tb);
 
-        // When the final reel (4) stops:
+        // Final reel stops:
         if (reel === 4) {
           if (rollIntervalRef.current) {
             clearInterval(rollIntervalRef.current);
@@ -315,18 +403,26 @@ export default function SlotsGame() {
       }
 
       if (matchCount >= 3) {
-        const baseMult = target.mult[matchCount] || 10;
-        const lineWinAmount = baseMult * betPerLine * comboMultiplier;
+        let lineWinAmount;
+        const isJackpotWin = matchCount === 5 && target.isWild;
+        if (isJackpotWin) {
+          lineWinAmount = displayJackpot;
+        } else {
+          const baseMult = target.mult[matchCount] || 10;
+          lineWinAmount = baseMult * betPerLine * comboMultiplier;
+        }
 
         spinWin += lineWinAmount;
         hitLines.push({
           id: line.id,
           name: line.name,
-          symbolName: target.name,
+          symbolName: isJackpotWin ? 'COSMIC JACKPOT' : target.name,
           symbolIcon: target.icon,
+          symbolImage: target.image,
           count: matchCount,
           win: lineWinAmount,
           color: line.color,
+          isJackpot: isJackpotWin,
         });
 
         for (let i = 0; i < matchCount; i++) {
@@ -341,15 +437,22 @@ export default function SlotsGame() {
       setWinningCells(matchedCells);
       setWinningLines(hitLines);
 
-      // Win Tier Title
-      if (spinWin >= totalBet * 40) {
-        setWinTitle('👑🚀 COSMIC MEGA JACKPOT!');
+      // Win Tier Title & Astronaut Cheer
+      if (hitLines.some((l) => l.isJackpot) || spinWin >= displayJackpot) {
+        setWinTitle('👑🚀 COSMIC PROGRESSIVE JACKPOT HIT!');
+        setAstronautMood('jackpot');
+      } else if (spinWin >= totalBet * 40) {
+        setWinTitle('👑🚀 COSMIC MEGA WIN!');
+        setAstronautMood('win');
       } else if (spinWin >= totalBet * 15) {
         setWinTitle('💥 SUPER WIN!');
+        setAstronautMood('win');
       } else if (spinWin >= totalBet * 5) {
         setWinTitle('🌟 BIG WIN!');
+        setAstronautMood('win');
       } else {
         setWinTitle('✨ WINNER!');
+        setAstronautMood('win');
       }
 
       // Combo Multiplier Increment (up to 5x on consecutive hits)
@@ -362,7 +465,8 @@ export default function SlotsGame() {
       setWinTitle('');
       setWinningCells(new Set());
       setWinningLines([]);
-      setComboMultiplier(1); // Reset combo on non-winning spin
+      setComboMultiplier(1);
+      setAstronautMood('idle');
     }
 
     // Auto-spin trigger
@@ -387,46 +491,69 @@ export default function SlotsGame() {
   };
 
   return (
-    <Box sx={{ width: '100%', maxWidth: 940, mx: 'auto', px: { xs: 0.5, sm: 2, md: 3 }, py: { xs: 1, md: 2 } }}>
-      {/* Progressive Jackpot Header */}
+    <Box sx={{ width: '100%', maxWidth: 1180, mx: 'auto', px: { xs: 0.5, sm: 1.5, md: 2.5 }, py: { xs: 1, md: 2 } }}>
+      {/* ========================================================================= */}
+      {/* 🌟 1. COSMIC PROGRESSIVE JACKPOT (STILL ON TOP AS REQUESTED)              */}
+      {/* ========================================================================= */}
       <Paper
-        elevation={8}
+        elevation={10}
         sx={{
-          p: { xs: 1.5, sm: 2 },
-          mb: 2,
+          p: { xs: 1.2, sm: 1.8 },
+          mb: { xs: 1.5, md: 2 },
           borderRadius: 3.5,
-          background: 'radial-gradient(ellipse at top, #1e1b4b 0%, #090d16 100%)',
-          border: '2px solid #f59e0b',
+          background: 'linear-gradient(135deg, #1e0b36 0%, #0d061f 50%, #15092a 100%)',
+          border: '2px solid #eab308',
+          boxShadow: '0 0 25px rgba(234, 179, 8, 0.35), inset 0 0 20px rgba(168, 85, 247, 0.25)',
           textAlign: 'center',
           color: '#ffffff',
           position: 'relative',
           overflow: 'hidden',
-          transition: 'all 0.3s ease',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5, flexWrap: 'wrap', gap: 0.5 }}>
+        {/* Top Action Row: Navigation & Audio Controls */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5, flexWrap: 'wrap', gap: 0.8 }}>
+          <Button
+            size="small"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/games')}
+            sx={{
+              color: '#cbd5e1',
+              bgcolor: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid #475569',
+              fontWeight: 800,
+              fontSize: '0.72rem',
+              borderRadius: 2,
+              px: 1.2,
+              '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.15)' },
+            }}
+          >
+            Lobby
+          </Button>
+
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
             <Chip
               size="small"
-              label={`${selectedLinesCount} LINES • ₱${betPerLine}/LINE`}
-              sx={{ bgcolor: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', fontWeight: 900, border: '1px solid #f59e0b', fontSize: '0.65rem' }}
+              icon={<BoltIcon sx={{ color: '#fbbf24 !important' }} />}
+              label={`${selectedLinesCount}L • ₱${betPerLine}/LINE • COMBO ${comboMultiplier}X`}
+              sx={{
+                bgcolor: 'rgba(245, 158, 11, 0.15)',
+                color: '#fde047',
+                fontWeight: 900,
+                border: '1px solid #eab308',
+                fontSize: '0.68rem',
+              }}
             />
-            {comboMultiplier > 1 && (
-              <Chip
-                size="small"
-                icon={<BoltIcon sx={{ color: '#fbbf24 !important' }} />}
-                label={`COMBO ${comboMultiplier}X`}
-                sx={{ bgcolor: 'rgba(234, 179, 8, 0.25)', color: '#fef08a', fontWeight: 900, border: '1px solid #eab308', fontSize: '0.65rem' }}
-              />
-            )}
-          </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
             <IconButton
               size="small"
               onClick={() => setShowPaytable(true)}
-              title="View Paytable & Multipliers"
-              sx={{ color: '#38bdf8', border: '1px solid #0284c7', bgcolor: 'rgba(14, 165, 233, 0.15)', p: 0.6 }}
+              title="Paytable & Rules"
+              sx={{
+                color: '#38bdf8',
+                border: '1px solid #0284c7',
+                bgcolor: 'rgba(14, 165, 233, 0.15)',
+                p: 0.6,
+              }}
             >
               <InfoOutlinedIcon fontSize="small" />
             </IconButton>
@@ -434,11 +561,11 @@ export default function SlotsGame() {
             <IconButton
               size="small"
               onClick={handleToggleMute}
-              title={isMuted ? "Unmute Slots Sound" : "Mute Slots Sound"}
+              title={isMuted ? 'Unmute Sound' : 'Mute Sound'}
               sx={{
-                color: isMuted ? "#94a3b8" : "#fbbf24",
-                border: isMuted ? "1px solid #475569" : "1px solid #fbbf24",
-                bgcolor: isMuted ? "rgba(15, 23, 42, 0.6)" : "rgba(245, 158, 11, 0.15)",
+                color: isMuted ? '#94a3b8' : '#fbbf24',
+                border: isMuted ? '1px solid #475569' : '1px solid #fbbf24',
+                bgcolor: isMuted ? 'rgba(15, 23, 42, 0.6)' : 'rgba(245, 158, 11, 0.15)',
                 p: 0.6,
               }}
             >
@@ -447,38 +574,84 @@ export default function SlotsGame() {
           </Box>
         </Box>
 
-        <Typography variant="overline" sx={{ color: '#fbbf24', letterSpacing: 2, fontWeight: 900, fontSize: { xs: '0.65rem', sm: '0.78rem' } }}>
-          ✨ COSMIC PROGRESSIVE JACKPOT (PHP) ✨
-        </Typography>
+        {/* Center Jackpot Marquee */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
+          <Typography
+            variant="overline"
+            sx={{
+              color: '#fbbf24',
+              letterSpacing: 2.5,
+              fontWeight: 900,
+              fontSize: { xs: '0.72rem', sm: '0.85rem' },
+            }}
+          >
+            ✨ COSMIC PROGRESSIVE JACKPOT (PHP) ✨
+          </Typography>
+          <Chip
+            size="small"
+            label="40% DEPOSIT SYNCED ⚡"
+            sx={{
+              bgcolor: 'rgba(52, 211, 153, 0.2)',
+              color: '#34d399',
+              border: '1px solid #10b981',
+              fontWeight: 900,
+              fontSize: '0.65rem',
+              height: 20,
+            }}
+          />
+        </Box>
+
         <Typography
-          variant="h4"
+          variant="h3"
           sx={{
             fontWeight: 900,
             color: '#fef08a',
             fontFamily: 'monospace',
-            fontSize: { xs: '1.7rem', sm: '2.4rem' },
+            fontSize: { xs: '1.9rem', sm: '2.8rem' },
             animation: 'jackpotGlow 2.5s infinite ease-in-out',
             lineHeight: 1.1,
+            my: 0.2,
+            textShadow: '0 0 25px rgba(250, 204, 21, 0.65), 0 0 45px rgba(234, 179, 8, 0.4)',
           }}
         >
-          {formatPHP(jackpot)}
+          {formatPHP(displayJackpot)}
         </Typography>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+          <Typography variant="caption" sx={{ color: '#cbd5e1', fontSize: '0.72rem' }}>
+            Directly synced to 40% of all real-money user deposits (e.g. 40% of ₱120 = ₱48.00)
+          </Typography>
+          <Chip
+            size="small"
+            label={`Total Real Deposits: ${formatPHP(totalRealDeposits || 0)} • 40% Synced Pool: ${formatPHP(displayJackpot)}`}
+            sx={{
+              bgcolor: 'rgba(52, 211, 153, 0.18)',
+              color: '#34d399',
+              border: '1px solid #10b981',
+              fontWeight: 800,
+              fontSize: '0.65rem',
+              height: 20,
+            }}
+          />
+        </Box>
       </Paper>
 
-      {/* 5-Reel Slot Machine Cabinet */}
+      {/* ========================================================================= */}
+      {/* 🚀 2. PRAGMATIC PLAY STYLE COSMIC SLOTS STAGE                             */}
+      {/* ========================================================================= */}
       <Paper
-        elevation={10}
+        elevation={12}
         sx={{
-          p: { xs: 1, sm: 2.5 },
-          borderRadius: 3.5,
-          background: 'linear-gradient(180deg, #090d16 0%, #030712 100%)',
-          border: '2.5px solid #f59e0b',
-          animation: 'cosmicCabinetGlow 4s infinite ease-in-out',
+          p: { xs: 1, sm: 2, md: 2.5 },
+          borderRadius: 4,
+          background: `radial-gradient(ellipse at 50% 30%, rgba(30, 11, 54, 0.75) 0%, rgba(13, 6, 26, 0.95) 100%), url("/src/assets/images/cosmic_space_bg_1792584955045.jpg") center/cover no-repeat`,
+          border: '2px solid #a855f7',
+          boxShadow: '0 0 35px rgba(168, 85, 247, 0.35)',
           position: 'relative',
           overflow: 'hidden',
         }}
       >
-        {/* Floating Coin & Star Shower on Win */}
+        {/* Floating Coin Shower on Win */}
         {lastWin > 0 && (
           <Box
             sx={{
@@ -488,139 +661,389 @@ export default function SlotsGame() {
               right: 0,
               bottom: 0,
               pointerEvents: 'none',
-              zIndex: 10,
+              zIndex: 15,
               overflow: 'hidden',
             }}
           >
-            {[...Array(16)].map((_, i) => (
+            {[...Array(18)].map((_, i) => (
               <Box
                 key={i}
                 sx={{
                   position: 'absolute',
                   top: '-30px',
-                  left: `${(i * 6.5 + Math.random() * 4)}%`,
-                  fontSize: `${18 + (i % 3) * 8}px`,
-                  animation: `coinFloat ${1.3 + (i % 4) * 0.3}s ease-in infinite`,
-                  animationDelay: `${(i % 5) * 0.18}s`,
+                  left: `${(i * 5.5 + Math.random() * 4)}%`,
+                  fontSize: `${1.2 + (i % 3) * 0.4}rem`,
+                  animation: `coinFloat ${1.4 + (i % 4) * 0.3}s ease-in-out infinite`,
+                  animationDelay: `${(i % 5) * 0.2}s`,
                 }}
               >
-                {['🪙', '⭐', '💎', '👑', '✨'][i % 5]}
+                {i % 3 === 0 ? '🪙' : i % 3 === 1 ? '⭐' : '💎'}
               </Box>
             ))}
           </Box>
         )}
 
-        {/* 5 Slot Machine Reels */}
-        <Grid container spacing={{ xs: 0.6, sm: 1.5 }} justifyContent="center">
-          {grid.map((column, colIdx) => {
-            const isReelSpinning = spinningReels[colIdx];
-            const isReelBouncing = reelsBouncing[colIdx];
+        {/* Desktop / Tablet Layout: Left Banner + 5-Reel Cabinet + Floating Spaceman */}
+        <Grid container spacing={{ xs: 1, md: 2 }} alignItems="center" justifyContent="center">
+          {/* LEFT WING: 3D Logo Emblem & Special Bets */}
+          <Grid
+            item
+            xs={12}
+            md={3}
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'row', md: 'column' },
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 1.5,
+              flexWrap: 'wrap',
+            }}
+          >
+            {/* 3D Cosmic Deluxe Logo Badge */}
+            <Box
+              sx={{
+                width: { xs: '110px', sm: '140px', md: '175px' },
+                textAlign: 'center',
+                filter: 'drop-shadow(0 0 16px rgba(245, 158, 11, 0.4))',
+              }}
+            >
+              <img
+                src="/src/assets/images/cosmic_deluxe_logo_1792584956997.jpg"
+                alt="Cosmic Deluxe"
+                referrerPolicy="no-referrer"
+                style={{
+                  width: '100%',
+                  borderRadius: 18,
+                  border: '2px solid rgba(250, 204, 21, 0.4)',
+                  display: 'block',
+                }}
+              />
+            </Box>
 
-            return (
-              <Grid item xs={2.4} key={colIdx}>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: { xs: 0.6, sm: 1.2 },
-                    p: { xs: 0.3, sm: 0.8 },
-                    background: 'linear-gradient(180deg, #131b2e 0%, #0b1120 100%)',
-                    borderRadius: 2.5,
-                    border: isReelSpinning ? '1.5px solid #f59e0b' : '1px solid #1e293b',
-                    boxShadow: isReelSpinning ? 'inset 0 0 15px rgba(245, 158, 11, 0.4)' : 'none',
-                    overflow: 'hidden',
-                    animation: isReelBouncing ? 'reelSnapBounce 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)' : 'none',
-                    transition: 'border 0.2s ease',
-                  }}
-                >
-                  {column.map((sym, rowIdx) => {
-                    const isWinning = winningCells.has(`${colIdx}-${rowIdx}`);
+            {/* Special Bets & Line Selector (Like Pragmatic Play side panel) */}
+            <Paper
+              elevation={6}
+              sx={{
+                p: 1.2,
+                borderRadius: 3,
+                bgcolor: 'rgba(21, 10, 42, 0.85)',
+                border: '1.5px solid #a855f7',
+                boxShadow: '0 0 16px rgba(168, 85, 247, 0.25)',
+                width: { xs: 'auto', md: '100%' },
+                textAlign: 'center',
+              }}
+            >
+              <Typography variant="overline" sx={{ color: '#c084fc', fontWeight: 900, letterSpacing: 1, fontSize: '0.65rem' }}>
+                SPECIAL BETS (₱1 LINE BET)
+              </Typography>
 
-                    return (
+              {/* Paylines Switcher */}
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5, my: 0.8 }}>
+                {[1, 3, 5].map((cnt) => (
+                  <Button
+                    key={cnt}
+                    size="small"
+                    variant={selectedLinesCount === cnt ? 'contained' : 'outlined'}
+                    onClick={() => {
+                      setSelectedLinesCount(cnt);
+                      slotsAudio.playChipClick();
+                    }}
+                    sx={{
+                      fontWeight: 900,
+                      minWidth: 0,
+                      px: 1,
+                      py: 0.3,
+                      fontSize: '0.68rem',
+                      borderRadius: 1.5,
+                      bgcolor: selectedLinesCount === cnt ? '#a855f7' : 'transparent',
+                      color: selectedLinesCount === cnt ? '#fff' : '#c084fc',
+                      borderColor: '#a855f7',
+                      '&:hover': { bgcolor: '#9333ea', borderColor: '#c084fc' },
+                    }}
+                  >
+                    {cnt}L
+                  </Button>
+                ))}
+              </Box>
+
+              {/* Quick Line Bets */}
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 0.4 }}>
+                {LINE_BETS.slice(0, 5).map((amt) => (
+                  <Chip
+                    key={amt}
+                    size="small"
+                    label={formatPHP(amt)}
+                    clickable
+                    onClick={() => {
+                      setBetPerLine(amt);
+                      slotsAudio.playChipClick();
+                    }}
+                    sx={{
+                      fontWeight: 900,
+                      fontSize: '0.65rem',
+                      height: 22,
+                      bgcolor: betPerLine === amt ? '#fbbf24' : 'rgba(255, 255, 255, 0.08)',
+                      color: betPerLine === amt ? '#000' : '#e2e8f0',
+                      border: betPerLine === amt ? '1px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.15)',
+                    }}
+                  />
+                ))}
+              </Box>
+            </Paper>
+          </Grid>
+
+          {/* CENTER: 5-REEL PRAGMATIC PLAY REEL CABINET */}
+          <Grid item xs={12} md={6}>
+            <Box
+              sx={{
+                p: { xs: 0.6, sm: 1.2 },
+                borderRadius: 3.5,
+                background: 'linear-gradient(180deg, #180931 0%, #0d041c 100%)',
+                border: '2.5px solid #a855f7',
+                boxShadow: '0 0 30px rgba(168, 85, 247, 0.45), inset 0 0 20px rgba(0, 0, 0, 0.8)',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+            >
+              {/* 5 Slot Machine Reels */}
+              <Grid container spacing={{ xs: 0.4, sm: 0.8 }} justifyContent="center">
+                {grid.map((column, colIdx) => {
+                  const isReelSpinning = spinningReels[colIdx];
+                  const isReelBouncing = reelsBouncing[colIdx];
+
+                  return (
+                    <Grid item xs={2.4} key={colIdx}>
                       <Box
-                        key={rowIdx}
                         sx={{
-                          height: { xs: 64, sm: 96 },
                           display: 'flex',
                           flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: isWinning
-                            ? 'radial-gradient(circle, rgba(245, 158, 11, 0.3) 0%, #020617 80%)'
-                            : '#020617',
+                          gap: { xs: 0.4, sm: 0.8 },
+                          p: { xs: 0.2, sm: 0.5 },
+                          background: 'rgba(20, 8, 38, 0.85)',
                           borderRadius: 2,
-                          border: isWinning ? '2px solid #fbbf24' : '1px solid #334155',
-                          position: 'relative',
-                          animation: isReelSpinning
-                            ? 'reelSpinBlur 0.12s linear infinite'
-                            : isWinning
-                            ? 'winCellPulse 1.2s infinite ease-in-out'
-                            : 'none',
-                          transition: 'all 0.2s ease',
+                          borderRight: colIdx < 4 ? '1.5px solid rgba(192, 132, 252, 0.25)' : 'none',
+                          border: isReelSpinning ? '1.5px solid #eab308' : 'none',
+                          boxShadow: isReelSpinning ? 'inset 0 0 15px rgba(234, 179, 8, 0.35)' : 'none',
+                          overflow: 'hidden',
+                          animation: isReelBouncing ? 'reelSnapBounce 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)' : 'none',
+                          transition: 'border 0.2s ease',
                         }}
                       >
-                        <Typography
-                          sx={{
-                            fontSize: { xs: '1.7rem', sm: '2.7rem' },
-                            lineHeight: 1,
-                            transform: isWinning ? 'scale(1.15)' : 'none',
-                            transition: 'transform 0.2s ease',
-                          }}
-                        >
-                          {sym.icon}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            color: sym.color,
-                            fontWeight: 900,
-                            fontSize: { xs: '0.52rem', sm: '0.72rem' },
-                            mt: 0.3,
-                            lineHeight: 1,
-                            letterSpacing: 0.5,
-                          }}
-                        >
-                          {sym.name}
-                        </Typography>
+                        {column.map((sym, rowIdx) => {
+                          const isWinning = winningCells.has(`${colIdx}-${rowIdx}`);
+
+                          return (
+                            <Box
+                              key={rowIdx}
+                              sx={{
+                                height: { xs: 68, sm: 94 },
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: isWinning
+                                  ? 'radial-gradient(circle, rgba(250, 204, 21, 0.4) 0%, #17092e 80%)'
+                                  : sym.bg || 'rgba(15, 6, 30, 0.85)',
+                                borderRadius: 2,
+                                border: isWinning
+                                  ? '2.5px solid #facc15'
+                                  : `1.5px solid ${sym.border || '#334155'}40`,
+                                position: 'relative',
+                                animation: isReelSpinning
+                                  ? 'reelSpinBlur 0.12s linear infinite'
+                                  : isWinning
+                                  ? 'symbolWinFlash 1s infinite ease-in-out'
+                                  : 'none',
+                                transition: 'all 0.2s ease',
+                              }}
+                            >
+                              {sym.image ? (
+                                <Box
+                                  component="img"
+                                  src={sym.image}
+                                  alt={sym.name}
+                                  referrerPolicy="no-referrer"
+                                  sx={{
+                                    width: { xs: 42, sm: 60 },
+                                    height: { xs: 42, sm: 60 },
+                                    objectFit: 'contain',
+                                    transform: isWinning ? 'scale(1.18)' : 'none',
+                                    filter: isWinning
+                                      ? 'drop-shadow(0 0 10px #facc15) drop-shadow(0 0 16px #c084fc)'
+                                      : 'drop-shadow(0 2px 6px rgba(0,0,0,0.6))',
+                                    transition: 'transform 0.2s ease',
+                                  }}
+                                />
+                              ) : (
+                                <Typography
+                                  sx={{
+                                    fontSize: { xs: '1.8rem', sm: '2.8rem' },
+                                    lineHeight: 1,
+                                    transform: isWinning ? 'scale(1.15)' : 'none',
+                                    filter: isWinning ? 'drop-shadow(0 0 8px #facc15)' : 'none',
+                                    transition: 'transform 0.2s ease',
+                                  }}
+                                >
+                                  {sym.icon}
+                                </Typography>
+                              )}
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: isWinning ? '#fef08a' : sym.color,
+                                  fontWeight: 900,
+                                  fontSize: { xs: '0.52rem', sm: '0.68rem' },
+                                  mt: 0.2,
+                                  lineHeight: 1,
+                                  letterSpacing: 0.5,
+                                  textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                                }}
+                              >
+                                {sym.name}
+                              </Typography>
+                            </Box>
+                          );
+                        })}
                       </Box>
-                    );
-                  })}
-                </Box>
+                    </Grid>
+                  );
+                })}
               </Grid>
-            );
-          })}
+            </Box>
+          </Grid>
+
+          {/* RIGHT WING: Floating 3D Spaceman Astronaut */}
+          <Grid
+            item
+            xs={12}
+            md={3}
+            sx={{
+              display: { xs: 'none', md: 'flex' },
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+            }}
+          >
+            {/* Astronaut Speech Bubble on Win */}
+            {lastWin > 0 && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: -20,
+                  bgcolor: '#fbbf24',
+                  color: '#000',
+                  fontWeight: 900,
+                  fontSize: '0.75rem',
+                  py: 0.4,
+                  px: 1.2,
+                  borderRadius: 2,
+                  boxShadow: '0 0 15px rgba(251, 191, 36, 0.7)',
+                  animation: 'bigWinBannerZoom 0.3s ease-out',
+                  zIndex: 10,
+                  '&::after': {
+                    content: '""',
+                    position: 'absolute',
+                    bottom: -6,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    borderWidth: '6px 6px 0',
+                    borderStyle: 'solid',
+                    borderColor: '#fbbf24 transparent transparent transparent',
+                  },
+                }}
+              >
+                {astronautMood === 'jackpot' ? 'JACKPOT HERO! ⭐' : 'SUPER WIN! 🚀'}
+              </Box>
+            )}
+
+            <Box
+              sx={{
+                width: '100%',
+                maxWidth: 175,
+                animation: 'astronautFloat 4.5s ease-in-out infinite',
+                filter: 'drop-shadow(0 0 20px rgba(168, 85, 247, 0.45))',
+              }}
+            >
+              <img
+                src="/src/assets/images/spaceman_astronaut_1792584956057.jpg"
+                alt="Cosmic Spaceman"
+                referrerPolicy="no-referrer"
+                style={{
+                  width: '100%',
+                  borderRadius: 24,
+                  border: '2px solid rgba(192, 132, 252, 0.5)',
+                  display: 'block',
+                }}
+              />
+            </Box>
+
+            <Typography
+              variant="caption"
+              sx={{
+                color: '#e2e8f0',
+                fontWeight: 800,
+                mt: 1,
+                fontSize: '0.68rem',
+                letterSpacing: 0.5,
+                textAlign: 'center',
+              }}
+            >
+              👨‍🚀 Cosmic Explorer
+            </Typography>
+          </Grid>
         </Grid>
 
-        {/* Win Alert & Payline Announcement */}
+        {/* Win Banner Announcement */}
         {lastWin > 0 && (
           <Box
             sx={{
               mt: 2,
-              p: 1.5,
-              borderRadius: 2.5,
-              background: 'linear-gradient(90deg, rgba(245,158,11,0.25) 0%, rgba(16,185,129,0.35) 100%)',
-              border: '2px solid #10b981',
-              boxShadow: '0 0 25px rgba(16, 185, 129, 0.4)',
+              p: 1.2,
+              borderRadius: 3,
+              background: 'linear-gradient(90deg, rgba(234, 179, 8, 0.3) 0%, rgba(16, 185, 129, 0.35) 100%)',
+              border: '2px solid #fbbf24',
+              boxShadow: '0 0 25px rgba(251, 191, 36, 0.5)',
               textAlign: 'center',
-              animation: 'bigWinBannerZoom 0.4s ease-out',
+              animation: 'bigWinBannerZoom 0.35s ease-out',
             }}
           >
-            <Typography variant="h5" sx={{ fontWeight: 900, color: '#34d399', letterSpacing: 0.5, fontSize: { xs: '1.15rem', sm: '1.5rem' } }}>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 900,
+                color: '#fde047',
+                letterSpacing: 0.5,
+                fontSize: { xs: '1.2rem', sm: '1.6rem' },
+                textShadow: '0 0 10px rgba(253, 224, 71, 0.8)',
+              }}
+            >
               {winTitle} +{formatPHP(lastWin)}
             </Typography>
 
-            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.8, flexWrap: 'wrap', mt: 0.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.6, flexWrap: 'wrap', mt: 0.5 }}>
               {winningLines.map((line, idx) => (
                 <Chip
                   key={idx}
                   size="small"
-                  label={`${line.name}: ${line.count}x ${line.symbolIcon} (+${formatPHP(line.win)})`}
+                  avatar={
+                    line.symbolImage ? (
+                      <Box
+                        component="img"
+                        src={line.symbolImage}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        sx={{ width: 18, height: 18, objectFit: 'contain' }}
+                      />
+                    ) : undefined
+                  }
+                  label={`${line.name}: ${line.count}x ${line.symbolImage ? '' : line.symbolIcon} (+${formatPHP(line.win)})`}
                   sx={{
-                    bgcolor: 'rgba(15, 23, 42, 0.85)',
+                    bgcolor: 'rgba(15, 6, 30, 0.9)',
                     color: line.color || '#fbbf24',
                     border: `1.5px solid ${line.color || '#f59e0b'}`,
                     fontWeight: 800,
-                    fontSize: '0.72rem',
+                    fontSize: '0.68rem',
                   }}
                 />
               ))}
@@ -628,175 +1051,202 @@ export default function SlotsGame() {
           </Box>
         )}
 
-        {/* Console: Line Selector & Line Bet (Includes ₱1!) */}
+        {/* ========================================================================= */}
+        {/* 🎮 3. PRAGMATIC PLAY AUTHENTIC BOTTOM HUD BAR                            */}
+        {/* ========================================================================= */}
         <Box
           sx={{
-            mt: 2.5,
-            pt: 2,
-            borderTop: '1px solid #1e293b',
+            mt: 2,
+            pt: 1.5,
+            borderTop: '1.5px solid rgba(168, 85, 247, 0.3)',
             display: 'flex',
-            flexDirection: 'column',
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: 'center',
+            justifyContent: 'space-between',
             gap: 1.5,
           }}
         >
-          {/* Top Row: Select Active Paylines (1, 3, or 5) & Line Bet (1, 5, 10, 25, 50, 100, 250) */}
+          {/* Left: Info, Turbo, Credit, Bet, Win */}
           <Box
             sx={{
               display: 'flex',
-              flexDirection: { xs: 'column', sm: 'row' },
-              justifyContent: 'space-between',
-              alignItems: { xs: 'stretch', sm: 'center' },
-              gap: 1.5,
-            }}
-          >
-            {/* Paylines Count Selector */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, justifyContent: { xs: 'center', sm: 'flex-start' } }}>
-              <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 800, fontSize: '0.7rem', mr: 0.5 }}>
-                PAYLINES:
-              </Typography>
-              {[1, 3, 5].map((cnt) => (
-                <Chip
-                  key={cnt}
-                  label={`${cnt} Line${cnt > 1 ? 's' : ''}`}
-                  clickable
-                  onClick={() => {
-                    setSelectedLinesCount(cnt);
-                    slotsAudio.playChipClick();
-                  }}
-                  sx={{
-                    fontWeight: 900,
-                    height: 28,
-                    fontSize: '0.72rem',
-                    bgcolor: selectedLinesCount === cnt ? '#0284c7' : '#1e293b',
-                    color: selectedLinesCount === cnt ? '#fff' : '#94a3b8',
-                    border: selectedLinesCount === cnt ? '1.5px solid #38bdf8' : '1px solid #334155',
-                  }}
-                />
-              ))}
-            </Box>
-
-            {/* Line Bet Chips - Starting at ₱1! */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', justifyContent: { xs: 'center', sm: 'flex-end' } }}>
-              <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 800, fontSize: '0.7rem', mr: 0.5 }}>
-                LINE BET:
-              </Typography>
-              {LINE_BETS.map((amt) => (
-                <Chip
-                  key={amt}
-                  label={formatPHP(amt)}
-                  clickable
-                  color={betPerLine === amt ? 'warning' : 'default'}
-                  onClick={() => {
-                    setBetPerLine(amt);
-                    slotsAudio.playChipClick();
-                  }}
-                  sx={{
-                    fontWeight: 900,
-                    height: 28,
-                    fontSize: '0.75rem',
-                    bgcolor: betPerLine === amt ? '#fbbf24' : '#1e293b',
-                    color: betPerLine === amt ? '#000' : '#fff',
-                    border: betPerLine === amt ? '1.5px solid #f59e0b' : '1px solid #475569',
-                  }}
-                />
-              ))}
-            </Box>
-          </Box>
-
-          {/* Bottom Row: Controls, Total Wager Display, and Spin Button */}
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: { xs: 'column', sm: 'row' },
               alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 1.5,
-              pt: 1,
-              borderTop: '1px dashed #334155',
+              gap: { xs: 1, sm: 1.5 },
+              flexWrap: 'wrap',
+              justifyContent: { xs: 'center', sm: 'flex-start' },
             }}
           >
-            {/* Turbo & Auto Spin */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {/* Turbo Toggle */}
+            <Tooltip title={isTurbo ? 'Turbo Spin Active' : 'Normal Spin Speed'}>
               <IconButton
                 size="small"
                 onClick={() => setIsTurbo(!isTurbo)}
-                title={isTurbo ? "Turbo Mode Active" : "Normal Spin Speed"}
                 sx={{
-                  color: isTurbo ? "#fbbf24" : "#64748b",
-                  border: isTurbo ? "1.5px solid #fbbf24" : "1px solid #334155",
-                  bgcolor: isTurbo ? "rgba(245, 158, 11, 0.15)" : "transparent",
-                  p: 0.8,
+                  color: isTurbo ? '#fbbf24' : '#94a3b8',
+                  bgcolor: isTurbo ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                  border: isTurbo ? '1.5px solid #fbbf24' : '1px solid #475569',
+                  p: 0.7,
                 }}
               >
                 {isTurbo ? <FlashOnIcon fontSize="small" /> : <FlashOffIcon fontSize="small" />}
               </IconButton>
+            </Tooltip>
 
-              {autoSpinCount > 0 ? (
-                <Button
-                  variant="outlined"
-                  color="error"
-                  size="small"
-                  onClick={stopAutoSpins}
-                  startIcon={<AutoModeIcon />}
-                  sx={{ fontWeight: 900, py: 0.6, fontSize: '0.75rem' }}
-                >
-                  Stop Auto ({autoSpinCount})
-                </Button>
-              ) : (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => startAutoSpins(10)}
-                  disabled={isSpinning || chips < totalBet}
-                  startIcon={<AutoModeIcon />}
-                  sx={{ fontWeight: 800, color: '#94a3b8', borderColor: '#475569', py: 0.6, fontSize: '0.75rem' }}
-                >
-                  Auto (10x)
-                </Button>
-              )}
+            {/* Credit (Balance) */}
+            <Box sx={{ textAlign: 'left' }}>
+              <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 800, fontSize: '0.62rem', display: 'block' }}>
+                CREDIT
+              </Typography>
+              <Typography variant="subtitle1" sx={{ color: '#fbbf24', fontWeight: 900, fontFamily: 'monospace', lineHeight: 1 }}>
+                {formatPHP(chips)}
+              </Typography>
             </Box>
 
-            {/* Total Wager and Spin Button */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: { xs: '100%', sm: 'auto' }, justifyContent: 'space-between' }}>
-              <Box sx={{ textAlign: 'left', minWidth: 90 }}>
-                <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 800, display: 'block', fontSize: '0.62rem' }}>
-                  TOTAL WAGER ({selectedLinesCount}L)
+            {/* Bet */}
+            <Box sx={{ textAlign: 'left' }}>
+              <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 800, fontSize: '0.62rem', display: 'block' }}>
+                BET ({selectedLinesCount}L)
+              </Typography>
+              <Typography variant="subtitle1" sx={{ color: '#fef08a', fontWeight: 900, fontFamily: 'monospace', lineHeight: 1 }}>
+                {formatPHP(totalBet)}
+              </Typography>
+            </Box>
+
+            {/* Win Display */}
+            {lastWin > 0 && (
+              <Box sx={{ textAlign: 'left' }}>
+                <Typography variant="caption" sx={{ color: '#34d399', fontWeight: 800, fontSize: '0.62rem', display: 'block' }}>
+                  WIN
                 </Typography>
-                <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#fbbf24', fontFamily: 'monospace', lineHeight: 1 }}>
-                  {formatPHP(totalBet)}
+                <Typography variant="subtitle1" sx={{ color: '#34d399', fontWeight: 900, fontFamily: 'monospace', lineHeight: 1 }}>
+                  +{formatPHP(lastWin)}
                 </Typography>
               </Box>
+            )}
+          </Box>
 
-              <Button
-                variant="contained"
+          {/* Right: Pragmatic Circular Bet Minus, Center Spin, Bet Plus & Autoplay */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {/* Decrease Bet Button (-) */}
+              <IconButton
+                size="small"
+                onClick={handleDecreaseBet}
+                disabled={isSpinning || LINE_BETS.indexOf(betPerLine) === 0}
+                sx={{
+                  color: '#fff',
+                  bgcolor: 'rgba(255, 255, 255, 0.1)',
+                  border: '1.5px solid #64748b',
+                  width: 38,
+                  height: 38,
+                  '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.25)' },
+                }}
+              >
+                <RemoveIcon fontSize="small" />
+              </IconButton>
+
+              {/* Large Pragmatic Style Spin Button */}
+              <Box
+                component="button"
                 disabled={isSpinning || chips < totalBet}
                 onClick={handleSpin}
-                startIcon={<CasinoIcon />}
                 sx={{
-                  flexGrow: { xs: 1, sm: 0 },
-                  px: { xs: 3.5, sm: 5.5 },
-                  py: 1.1,
-                  fontSize: { xs: '1rem', sm: '1.15rem' },
-                  fontWeight: 900,
-                  borderRadius: 2.5,
-                  background: 'linear-gradient(45deg, #f59e0b, #fbbf24)',
-                  color: '#000',
-                  boxShadow: '0 0 20px rgba(245, 158, 11, 0.5)',
+                  width: { xs: 68, sm: 76 },
+                  height: { xs: 68, sm: 76 },
+                  borderRadius: '50%',
+                  border: '3px solid #facc15',
+                  background: isSpinning
+                    ? 'radial-gradient(circle, #3b0764 0%, #1e1b4b 100%)'
+                    : 'radial-gradient(circle, #9333ea 0%, #4c1d95 60%, #1e1b4b 100%)',
+                  boxShadow: '0 0 25px rgba(245, 158, 11, 0.6), inset 0 0 15px rgba(250, 204, 21, 0.4)',
+                  cursor: isSpinning || chips < totalBet ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   transition: 'all 0.15s ease',
-                  '&:hover': {
-                    transform: 'scale(1.02)',
-                    filter: 'brightness(1.1)',
+                  outline: 'none',
+                  '&:hover:not(:disabled)': {
+                    transform: 'scale(1.06)',
+                    boxShadow: '0 0 35px rgba(245, 158, 11, 0.85), inset 0 0 20px rgba(250, 204, 21, 0.6)',
+                  },
+                  '&:active:not(:disabled)': {
+                    transform: 'scale(0.96)',
                   },
                 }}
               >
-                {isSpinning ? 'SPINNING...' : 'SPIN'}
-              </Button>
+                {isSpinning ? (
+                  <StopIcon sx={{ fontSize: 36, color: '#facc15', animation: 'pragmaticSpin 1s linear infinite' }} />
+                ) : (
+                  <CasinoIcon sx={{ fontSize: 38, color: '#fef08a' }} />
+                )}
+              </Box>
+
+              {/* Increase Bet Button (+) */}
+              <IconButton
+                size="small"
+                onClick={handleIncreaseBet}
+                disabled={isSpinning || LINE_BETS.indexOf(betPerLine) === LINE_BETS.length - 1}
+                sx={{
+                  color: '#fff',
+                  bgcolor: 'rgba(255, 255, 255, 0.1)',
+                  border: '1.5px solid #64748b',
+                  width: 38,
+                  height: 38,
+                  '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.25)' },
+                }}
+              >
+                <AddIcon fontSize="small" />
+              </IconButton>
             </Box>
+
+            {/* Autoplay Pill underneath spin button */}
+            {autoSpinCount > 0 ? (
+              <Button
+                size="small"
+                variant="contained"
+                color="error"
+                onClick={stopAutoSpins}
+                startIcon={<AutoModeIcon sx={{ fontSize: 14 }} />}
+                sx={{
+                  fontWeight: 900,
+                  py: 0.2,
+                  px: 1.5,
+                  fontSize: '0.65rem',
+                  borderRadius: 2,
+                  height: 24,
+                }}
+              >
+                STOP AUTOPLAY ({autoSpinCount})
+              </Button>
+            ) : (
+              <Button
+                size="small"
+                onClick={() => startAutoSpins(10)}
+                disabled={isSpinning || chips < totalBet}
+                startIcon={<AutoModeIcon sx={{ fontSize: 14 }} />}
+                sx={{
+                  fontWeight: 900,
+                  py: 0.2,
+                  px: 1.5,
+                  fontSize: '0.65rem',
+                  borderRadius: 2,
+                  bgcolor: 'rgba(255, 255, 255, 0.08)',
+                  color: '#cbd5e1',
+                  border: '1px solid #475569',
+                  height: 24,
+                  '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.18)' },
+                }}
+              >
+                AUTOPLAY
+              </Button>
+            )}
           </Box>
         </Box>
       </Paper>
 
-      {/* Paytable & Cosmic Rules Modal */}
+      {/* ========================================================================= */}
+      {/* 📖 4. PAYTABLE & MULTIPLIERS MODAL                                        */}
+      {/* ========================================================================= */}
       <Dialog
         open={showPaytable}
         onClose={() => setShowPaytable(false)}
@@ -804,27 +1254,41 @@ export default function SlotsGame() {
         fullWidth
         PaperProps={{
           sx: {
-            bgcolor: '#0f172a',
-            border: '2px solid #f59e0b',
+            bgcolor: '#0f0622',
+            border: '2px solid #a855f7',
             borderRadius: 3.5,
             color: '#fff',
+            boxShadow: '0 0 35px rgba(168, 85, 247, 0.5)',
           },
         }}
       >
-        <DialogTitle sx={{ fontWeight: 900, color: '#fbbf24', borderBottom: '1px solid #334155' }}>
+        <DialogTitle sx={{ fontWeight: 900, color: '#fde047', borderBottom: '1px solid rgba(168, 85, 247, 0.3)' }}>
           Cosmic Slots Deluxe • Paytable & Multipliers
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {/* Features Highlights */}
-          <Box sx={{ mb: 2.5, p: 1.5, bgcolor: 'rgba(245, 158, 11, 0.12)', borderRadius: 2, border: '1px solid #f59e0b' }}>
-            <Typography variant="subtitle2" sx={{ color: '#fbbf24', fontWeight: 900, mb: 0.5 }}>
-              ⭐ Cosmic Wild & Combo Multipliers:
+          <Box sx={{ mb: 2, p: 1.5, bgcolor: 'rgba(234, 179, 8, 0.12)', borderRadius: 2, border: '1px solid #eab308' }}>
+            <Typography variant="subtitle2" sx={{ color: '#fde047', fontWeight: 900, mb: 0.5 }}>
+              ⭐ Cosmic Wild Star & Combo Multipliers:
             </Typography>
             <Typography variant="caption" sx={{ color: '#e2e8f0', display: 'block', mb: 0.5 }}>
               • <strong>Cosmic Star ⭐:</strong> Acts as <strong>WILD</strong> (substitutes all symbols across active paylines).
             </Typography>
             <Typography variant="caption" sx={{ color: '#e2e8f0', display: 'block' }}>
               • <strong>Combo Multipliers:</strong> Consecutive winning spins charge the multiplier meter up to <strong>5X</strong>!
+            </Typography>
+          </Box>
+
+          {/* Cosmic Progressive Jackpot Feature */}
+          <Box sx={{ mb: 2, p: 1.5, bgcolor: 'rgba(52, 211, 153, 0.12)', borderRadius: 2, border: '1px solid #10b981' }}>
+            <Typography variant="subtitle2" sx={{ color: '#34d399', fontWeight: 900, mb: 0.5 }}>
+              💰 40% Real-Money Deposit Synced Progressive Jackpot:
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#e2e8f0', display: 'block', mb: 0.5 }}>
+              • <strong>40% Deposit Inflow:</strong> 40% of every Philippine Peso deposited by real users through PayMongo QRPH directly increases the Cosmic Progressive Jackpot in real time!
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#e2e8f0', display: 'block' }}>
+              • <strong>Mega Jackpot Trigger:</strong> Hit <strong>5 Cosmic Stars (⭐)</strong> on any active payline to trigger and win the entire live progressive jackpot pool!
             </Typography>
           </Box>
 
@@ -839,12 +1303,22 @@ export default function SlotsGame() {
                   sx={{
                     p: 1,
                     textAlign: 'center',
-                    bgcolor: '#1e293b',
-                    border: `1.5px solid ${sym.color}`,
+                    bgcolor: 'rgba(20, 8, 38, 0.9)',
+                    border: `1.5px solid ${sym.border}`,
                     borderRadius: 2,
                   }}
                 >
-                  <Typography sx={{ fontSize: '1.8rem', lineHeight: 1 }}>{sym.icon}</Typography>
+                  {sym.image ? (
+                    <Box
+                      component="img"
+                      src={sym.image}
+                      alt={sym.name}
+                      referrerPolicy="no-referrer"
+                      sx={{ width: 44, height: 44, objectFit: 'contain', mx: 'auto', display: 'block', mb: 0.5 }}
+                    />
+                  ) : (
+                    <Typography sx={{ fontSize: '1.8rem', lineHeight: 1 }}>{sym.icon}</Typography>
+                  )}
                   <Typography variant="subtitle2" sx={{ fontWeight: 900, color: sym.color }}>
                     {sym.name} {sym.isWild && '(WILD)'}
                   </Typography>
@@ -856,7 +1330,7 @@ export default function SlotsGame() {
             ))}
           </Grid>
 
-          <Box sx={{ mt: 2.5, p: 1.5, bgcolor: '#020617', borderRadius: 2, border: '1px solid #334155' }}>
+          <Box sx={{ mt: 2, p: 1.5, bgcolor: '#090314', borderRadius: 2, border: '1px solid rgba(168, 85, 247, 0.3)' }}>
             <Typography variant="subtitle2" sx={{ color: '#fbbf24', fontWeight: 800, mb: 0.5 }}>
               Active Payline Configurations:
             </Typography>

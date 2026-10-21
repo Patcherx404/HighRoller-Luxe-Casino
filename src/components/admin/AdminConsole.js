@@ -345,6 +345,77 @@ export default function AdminConsole() {
           </Grid>
         </Grid>
 
+        {/* 🌟 40% COSMIC PROGRESSIVE JACKPOT SYNC MONITOR */}
+        <Paper
+          elevation={4}
+          sx={{
+            p: 2,
+            mb: 2.5,
+            borderRadius: 2.5,
+            bgcolor: '#090d16',
+            border: '2px solid #eab308',
+            background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(15, 23, 42, 0.95) 100%)',
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography sx={{ fontSize: '1.4rem' }}>🎰✨</Typography>
+              <Typography variant="subtitle1" sx={{ color: '#fbbf24', fontWeight: 900 }}>
+                Cosmic Progressive Jackpot Allocation (40% Synced)
+              </Typography>
+            </Box>
+            <Chip
+              size="small"
+              label="LIVE SYNCED TO COSMIC SLOTS DELUXE ⚡"
+              sx={{ bgcolor: 'rgba(234, 179, 8, 0.2)', color: '#fde047', border: '1px solid #eab308', fontWeight: 900, fontSize: '0.65rem' }}
+            />
+          </Box>
+
+          <Grid container spacing={1.5} alignItems="center">
+            <Grid item xs={12} sm={4}>
+              <Box sx={{ p: 1.5, bgcolor: '#020617', borderRadius: 2, border: '1px solid #334155' }}>
+                <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 800 }}>
+                  TOTAL REAL USER DEPOSITS
+                </Typography>
+                <Typography variant="h5" sx={{ color: '#38bdf8', fontWeight: 900, fontFamily: 'monospace' }}>
+                  {formatPHP(totalRealMoney)}
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.68rem' }}>
+                  Total verified cash deposited by users
+                </Typography>
+              </Box>
+            </Grid>
+
+            <Grid item xs={12} sm={4}>
+              <Box sx={{ p: 1.5, bgcolor: '#020617', borderRadius: 2, border: '1px solid #334155' }}>
+                <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 800 }}>
+                  JACKPOT ALLOCATION CUT
+                </Typography>
+                <Typography variant="h5" sx={{ color: '#34d399', fontWeight: 900, fontFamily: 'monospace' }}>
+                  40.0%
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.68rem' }}>
+                  40% of {formatPHP(totalRealMoney)}
+                </Typography>
+              </Box>
+            </Grid>
+
+            <Grid item xs={12} sm={4}>
+              <Box sx={{ p: 1.5, bgcolor: '#020617', borderRadius: 2, border: '1.5px solid #eab308' }}>
+                <Typography variant="caption" sx={{ color: '#fde047', fontWeight: 900 }}>
+                  COSMIC PROGRESSIVE JACKPOT
+                </Typography>
+                <Typography variant="h5" sx={{ color: '#fef08a', fontWeight: 900, fontFamily: 'monospace' }}>
+                  {formatPHP(Math.round(totalRealMoney * 0.40 * 100) / 100)}
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#34d399', fontSize: '0.68rem', fontWeight: 700 }}>
+                  Live in Cosmic Slots Deluxe (e.g. 40% of 120 = 48)
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+
         {/* Toggleable Live Deposits Table */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, mb: 1 }}>
           <Typography variant="subtitle2" sx={{ color: '#e2e8f0', fontWeight: 800 }}>

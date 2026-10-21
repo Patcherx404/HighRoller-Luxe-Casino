@@ -105,7 +105,32 @@ export const FirebaseCasinoProvider = ({ children }) => {
     return 'Bronze';
   };
 
-  // Sync casino configuration from Firestore in real time
+  // Total Real Money Deposits and 40% Synced Cosmic Progressive Jackpot
+  const [totalRealDeposits, setTotalRealDeposits] = useState(0);
+  const [cosmicJackpot, setCosmicJackpot] = useState(0);
+
+  // Sync Total Real Money Deposits from Users & 40% Cosmic Progressive Jackpot
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, 'real_deposits'),
+      (snapshot) => {
+        let total = 0;
+        snapshot.forEach((d) => {
+          total += Number(d.data().amount) || 0;
+        });
+        setTotalRealDeposits(total);
+        // User Requirement: Exact 40% of Total Deposits from Users (e.g. 120 total deposits -> 40% of 120 = 48)
+        const computedJackpot = Math.round(total * 0.40 * 100) / 100;
+        setCosmicJackpot(computedJackpot);
+      },
+      (err) => {
+        console.warn('Real deposits listener error:', err);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // Sync casino win rates configuration from Firestore in real time
   useEffect(() => {
     const configRef = doc(db, 'casino_config', 'winrates');
     const unsub = onSnapshot(
@@ -114,10 +139,10 @@ export const FirebaseCasinoProvider = ({ children }) => {
         if (snap.exists()) {
           const data = snap.data();
           setCasinoConfig({
-            slotsWinRate: typeof data.slotsWinRate === 'number' ? data.slotsWinRate : 50,
-            blackjackWinRate: typeof data.blackjackWinRate === 'number' ? data.blackjackWinRate : 50,
-            rouletteWinRate: typeof data.rouletteWinRate === 'number' ? data.rouletteWinRate : 50,
-            pokerWinRate: typeof data.pokerWinRate === 'number' ? data.pokerWinRate : 50,
+            slotsWinRate: typeof data.slotsWinRate === 'number' ? data.slotsWinRate : 32,
+            blackjackWinRate: typeof data.blackjackWinRate === 'number' ? data.blackjackWinRate : 38,
+            rouletteWinRate: typeof data.rouletteWinRate === 'number' ? data.rouletteWinRate : 36,
+            pokerWinRate: typeof data.pokerWinRate === 'number' ? data.pokerWinRate : 35,
           });
           try {
             localStorage.setItem('casino_global_winrates', JSON.stringify(data));
@@ -488,6 +513,9 @@ export const FirebaseCasinoProvider = ({ children }) => {
         ADMIN_EMAIL,
         casinoConfig,
         updateCasinoConfig,
+        totalRealDeposits,
+        cosmicJackpot,
+        jackpotDepositCut: 0.40,
         chips,
         stats,
         transactions,
