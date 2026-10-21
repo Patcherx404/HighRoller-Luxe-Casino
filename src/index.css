@@ -169,13 +169,16 @@ html, body {
   }
 }
 
-/* Pragmatic Play Cosmic Slots Redesign Animations */
-@keyframes astronautFloat {
+/* Jazz Casino BGM Pulse */
+@keyframes jazzPulse {
   0%, 100% {
-    transform: translateY(0px) rotate(0deg);
+    transform: scale(1) rotate(0deg);
   }
-  50% {
-    transform: translateY(-14px) rotate(2.5deg);
+  25% {
+    transform: scale(1.1) rotate(-6deg);
+  }
+  75% {
+    transform: scale(1.1) rotate(6deg);
   }
 }
 

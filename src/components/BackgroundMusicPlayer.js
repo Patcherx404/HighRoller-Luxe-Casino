@@ -191,14 +191,14 @@ export default function BackgroundMusicPlayer() {
             setShowMenu((prev) => !prev);
           }}
           sx={{
-            width: { xs: 42, sm: 46 },
-            height: { xs: 42, sm: 46 },
+            width: { xs: 38, sm: 42 },
+            height: { xs: 38, sm: 42 },
             borderRadius: '50%',
-            bgcolor: 'rgba(15, 23, 42, 0.92)',
+            bgcolor: 'rgba(15, 23, 42, 0.95)',
             backdropFilter: 'blur(10px)',
-            border: '2px solid #f59e0b',
+            border: isPlaying ? '2px solid #fbbf24' : '2px solid #64748b',
             boxShadow: isPlaying
-              ? '0 0 16px rgba(245, 158, 11, 0.55), inset 0 0 10px rgba(251, 191, 36, 0.3)'
+              ? '0 0 16px rgba(251, 191, 36, 0.6), inset 0 0 10px rgba(251, 191, 36, 0.25)'
               : '0 2px 10px rgba(0, 0, 0, 0.5)',
             cursor: 'pointer',
             display: 'flex',
@@ -210,55 +210,26 @@ export default function BackgroundMusicPlayer() {
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': {
               transform: 'scale(1.1)',
-              boxShadow: '0 0 22px rgba(245, 158, 11, 0.8), inset 0 0 12px rgba(251, 191, 36, 0.5)',
-              border: '2px solid #fbbf24',
+              boxShadow: '0 0 22px rgba(245, 158, 11, 0.85), inset 0 0 12px rgba(251, 191, 36, 0.4)',
+              borderColor: '#fbbf24',
             },
             '&:active': {
-              transform: 'scale(0.94)',
+              transform: 'scale(0.92)',
             },
           }}
         >
-          {/* Animated sound equalizer waves when playing, or icon */}
-          {isPlaying && !isMuted ? (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '2px',
-                height: 16,
-              }}
-            >
-              <Box
-                sx={{
-                  width: 2.5,
-                  bgcolor: '#fbbf24',
-                  borderRadius: 1,
-                  animation: 'soundWave 0.7s infinite ease-in-out alternate',
-                }}
-              />
-              <Box
-                sx={{
-                  width: 2.5,
-                  bgcolor: '#34d399',
-                  borderRadius: 1,
-                  animation: 'soundWave 1.0s infinite ease-in-out alternate 0.2s',
-                }}
-              />
-              <Box
-                sx={{
-                  width: 2.5,
-                  bgcolor: '#38bdf8',
-                  borderRadius: 1,
-                  animation: 'soundWave 0.8s infinite ease-in-out alternate 0.4s',
-                }}
-              />
-            </Box>
-          ) : (
-            <Box sx={{ fontSize: '1.25rem', lineHeight: 1 }}>
-              {isPlaying ? '🎷' : '🔇'}
-            </Box>
-          )}
+          {/* Saxophone Emoji with subtle bounce when playing */}
+          <Box
+            sx={{
+              fontSize: { xs: '1.15rem', sm: '1.25rem' },
+              lineHeight: 1,
+              filter: isPlaying ? 'drop-shadow(0 0 6px #facc15)' : 'grayscale(60%)',
+              animation: isPlaying && !isMuted ? 'jazzPulse 1.8s infinite ease-in-out' : 'none',
+              transform: isPlaying ? 'scale(1.05)' : 'none',
+            }}
+          >
+            {isMuted ? '🔇' : '🎷'}
+          </Box>
 
           {/* Small corner badge indicating continuous loop (∞) */}
           <Box
@@ -266,26 +237,27 @@ export default function BackgroundMusicPlayer() {
               e.stopPropagation();
               setShowMenu((prev) => !prev);
             }}
-            title="Volume & Controls"
+            title="Continuous Loop • Click for Volume"
             sx={{
               position: 'absolute',
               bottom: -2,
               right: -2,
-              width: 16,
-              height: 16,
+              width: 15,
+              height: 15,
               borderRadius: '50%',
-              bgcolor: isPlaying ? '#10b981' : '#64748b',
+              bgcolor: isPlaying ? '#10b981' : '#475569',
               border: '1.5px solid #0f172a',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '9px',
+              fontSize: '10px',
               color: '#fff',
               fontWeight: 900,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.6)',
+              lineHeight: 1,
             }}
           >
-            {isPlaying ? '∞' : '×'}
+            ∞
           </Box>
         </Box>
       </Tooltip>
