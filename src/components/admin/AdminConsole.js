@@ -556,6 +556,12 @@ export default function AdminConsole() {
                 🎯 Mathematical Accuracy: Exactly {rates.slotsWinRate}% of spins generate winning paylines. House retains {100 - rates.slotsWinRate}%.
               </Typography>
             </Box>
+
+            <Box sx={{ mt: 1, p: 1, bgcolor: 'rgba(239, 68, 68, 0.12)', borderRadius: 2, border: '1px solid rgba(239, 68, 68, 0.35)' }}>
+              <Typography variant="caption" sx={{ color: '#f87171', fontWeight: 800, display: 'block' }}>
+                🛡️ Bankroll Protection Active: When a player reaches ₱400 (balance or accumulated wins), the win rate automatically throttles down to 8% to protect the house bankroll.
+              </Typography>
+            </Box>
           </Paper>
         </Grid>
 

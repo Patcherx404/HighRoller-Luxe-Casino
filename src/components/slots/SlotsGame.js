@@ -81,19 +81,21 @@ const SYMBOLS = [
     id: 'sapphire',
     name: 'Blue Sapphire',
     icon: '🔷',
+    image: '/assets/aistudio/Luminous_Sapphire_Crystal_Cluster_2d822d90.png',
     mult: { 3: 10, 4: 50, 5: 180 },
-    color: '#60a5fa',
-    bg: 'linear-gradient(135deg, rgba(96, 165, 250, 0.3) 0%, rgba(29, 78, 216, 0.2) 100%)',
-    border: '#2563eb',
+    color: '#38bdf8',
+    bg: 'linear-gradient(135deg, rgba(56, 189, 248, 0.35) 0%, rgba(30, 64, 175, 0.25) 100%)',
+    border: '#3b82f6',
   },
   {
     id: 'emerald',
     name: 'Green Emerald',
     icon: '🟢',
+    image: '/assets/aistudio/Emerald_Crystal_Cluster_293caf2f.png',
     mult: { 3: 6, 4: 25, 5: 120 },
-    color: '#10b981',
-    bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.3) 0%, rgba(4, 120, 87, 0.2) 100%)',
-    border: '#059669',
+    color: '#34d399',
+    bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.35) 0%, rgba(4, 120, 87, 0.25) 100%)',
+    border: '#10b981',
   },
   {
     id: 'amethyst',
@@ -118,6 +120,11 @@ const PAYLINE_DEFS = [
   { id: 4, name: 'V-Shape', color: '#c084fc', coords: [[0, 0], [1, 1], [2, 2], [3, 1], [4, 0]] },
   { id: 5, name: 'Inverted-V', color: '#f43f5e', coords: [[0, 2], [1, 1], [2, 0], [3, 1], [4, 2]] },
 ];
+
+// Fixed dimensions for the 5-reel viewport so it never expands or alters layout during spins
+const REEL_HEIGHT = { xs: 264, sm: 350, md: 433, lg: 478 };
+const SYMBOL_HEIGHT = { xs: 84, sm: 110, md: 135, lg: 150 };
+const CELL_GAP = { xs: '4px', sm: '6px', md: '8px', lg: '8px' };
 
 export default function SlotsGame() {
   const navigate = useNavigate();
@@ -177,13 +184,23 @@ export default function SlotsGame() {
   const [isMuted, setIsMuted] = useState(slotsAudio.isMuted);
   const [showPaytable, setShowPaytable] = useState(false);
 
-  const rollIntervalRef = useRef(null);
   const timeoutsRef = useRef([]);
+  const pendingGridRef = useRef(null);
+  const sessionWinsRef = useRef(0);
 
-  // Clean up timeouts on unmount
+  // Spinning strips for smooth 60fps downward visual roll without React state thrashing
+  const [spinningStrips, setSpinningStrips] = useState(() => [
+    [SYMBOLS[0], SYMBOLS[1], SYMBOLS[2], SYMBOLS[0], SYMBOLS[1], SYMBOLS[2]],
+    [SYMBOLS[3], SYMBOLS[4], SYMBOLS[5], SYMBOLS[3], SYMBOLS[4], SYMBOLS[5]],
+    [SYMBOLS[6], SYMBOLS[7], SYMBOLS[0], SYMBOLS[6], SYMBOLS[7], SYMBOLS[0]],
+    [SYMBOLS[1], SYMBOLS[2], SYMBOLS[3], SYMBOLS[1], SYMBOLS[2], SYMBOLS[3]],
+    [SYMBOLS[4], SYMBOLS[5], SYMBOLS[6], SYMBOLS[4], SYMBOLS[5], SYMBOLS[6]],
+  ]);
+
+  // Clean up timeouts and sound loops on unmount
   useEffect(() => {
     return () => {
-      if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
+      slotsAudio.stopSpinLoop();
       timeoutsRef.current.forEach(clearTimeout);
     };
   }, []);
@@ -208,6 +225,7 @@ export default function SlotsGame() {
 
   // Change line bet step (using - and + buttons)
   const handleDecreaseBet = () => {
+    if (isSpinning) return;
     const idx = LINE_BETS.indexOf(betPerLine);
     if (idx > 0) {
       setBetPerLine(LINE_BETS[idx - 1]);
@@ -216,6 +234,7 @@ export default function SlotsGame() {
   };
 
   const handleIncreaseBet = () => {
+    if (isSpinning) return;
     const idx = LINE_BETS.indexOf(betPerLine);
     if (idx < LINE_BETS.length - 1) {
       setBetPerLine(LINE_BETS[idx + 1]);
@@ -223,9 +242,42 @@ export default function SlotsGame() {
     }
   };
 
+  // Max Bet Action: 5 lines, highest line bet
+  const handleMaxBet = () => {
+    if (isSpinning) return;
+    setSelectedLinesCount(5);
+    setBetPerLine(LINE_BETS[LINE_BETS.length - 1]);
+    slotsAudio.playMaxBet();
+  };
+
+  // Quick Stop / Skip Animation: Instantly and cleanly lands all reels
+  const handleQuickStop = () => {
+    if (!isSpinning || !pendingGridRef.current) return;
+    timeoutsRef.current.forEach(clearTimeout);
+    timeoutsRef.current = [];
+
+    slotsAudio.stopSpinLoop();
+    slotsAudio.playReelStop(4);
+
+    const finalGrid = pendingGridRef.current;
+    setGrid(finalGrid);
+    setSpinningReels([false, false, false, false, false]);
+    setReelsBouncing([true, true, true, true, true]);
+
+    const tb = setTimeout(() => {
+      setReelsBouncing([false, false, false, false, false]);
+    }, 280);
+    timeoutsRef.current.push(tb);
+
+    evaluateSpinResults(finalGrid);
+  };
+
   // Main Spin Action
   const handleSpin = async () => {
-    if (isSpinning) return;
+    if (isSpinning) {
+      handleQuickStop();
+      return;
+    }
 
     if (chips < totalBet) {
       if (autoSpinCount > 0) setAutoSpinCount(0);
@@ -243,29 +295,25 @@ export default function SlotsGame() {
     }
 
     slotsAudio.playSpinStart();
+    slotsAudio.startSpinLoop();
     setIsSpinning(true);
     setLastWin(0);
     setWinTitle('');
     setWinningCells(new Set());
     setWinningLines([]);
-    setSpinningReels([true, true, true, true, true]);
-    setReelsBouncing([false, false, false, false, false]);
 
     // Clear any previous timeouts
     timeoutsRef.current.forEach(clearTimeout);
     timeoutsRef.current = [];
 
-    // Realistic Real-Time Reel Rolling Animation
-    if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
-    rollIntervalRef.current = setInterval(() => {
-      setGrid((prev) => {
-        return prev.map(() => [getRandomSymbol(), getRandomSymbol(), getRandomSymbol()]);
-      });
-    }, isTurbo ? 45 : 65);
-
     // Precise Mathematical Win Rate Engine:
     // Respects casinoConfig.slotsWinRate (Default: 32% tight house edge)
-    const targetWinRate = Math.max(1, Math.min(100, Number(casinoConfig?.slotsWinRate ?? 32)));
+    const baseWinRate = Math.max(1, Math.min(100, Number(casinoConfig?.slotsWinRate ?? 32)));
+
+    // 🛡️ Bankroll Protection: If the user reaches 400 pesos (balance >= 400 or total accumulated wins >= 400),
+    // lower the win rate to 8%
+    const hasReached400 = chips >= 400 || (sessionWinsRef.current >= 400);
+    const targetWinRate = hasReached400 ? 8 : baseWinRate;
     const willWin = (Math.random() * 100) < targetWinRate;
 
     // Generate natural, organic 5x3 randomized grid
@@ -330,21 +378,36 @@ export default function SlotsGame() {
       }
     }
 
-    // Staggered reel stop timing
-    const baseDelay = isTurbo ? 200 : 500;
+    pendingGridRef.current = finalGrid;
+
+    // Build randomized smooth 6-symbol scrolling strips for continuous downward motion
+    const strips = [0, 1, 2, 3, 4].map(() => {
+      const s0 = getRandomSymbol();
+      const s1 = getRandomSymbol();
+      const s2 = getRandomSymbol();
+      return [s0, s1, s2, s0, s1, s2];
+    });
+    setSpinningStrips(strips);
+
+    // Start all 5 reels rolling smoothly
+    setSpinningReels([true, true, true, true, true]);
+    setReelsBouncing([false, false, false, false, false]);
+
+    // Staggered sequential reel stop timing with natural mechanical deceleration
+    const baseDelay = isTurbo ? 220 : 550;
     const stepDelay = isTurbo ? 130 : 250;
 
     for (let reel = 0; reel < 5; reel++) {
       const t = setTimeout(() => {
-        setSpinningReels((prev) => {
-          const next = [...prev];
-          next[reel] = false;
-          return next;
-        });
-
         setGrid((prev) => {
           const next = [...prev];
           next[reel] = finalGrid[reel];
+          return next;
+        });
+
+        setSpinningReels((prev) => {
+          const next = [...prev];
+          next[reel] = false;
           return next;
         });
 
@@ -362,15 +425,12 @@ export default function SlotsGame() {
             next[reel] = false;
             return next;
           });
-        }, 280);
+        }, 320);
         timeoutsRef.current.push(tb);
 
         // Final reel stops:
         if (reel === 4) {
-          if (rollIntervalRef.current) {
-            clearInterval(rollIntervalRef.current);
-            rollIntervalRef.current = null;
-          }
+          slotsAudio.stopSpinLoop();
           evaluateSpinResults(finalGrid);
         }
       }, baseDelay + reel * stepDelay);
@@ -430,6 +490,7 @@ export default function SlotsGame() {
     });
 
     if (spinWin > 0) {
+      sessionWinsRef.current += spinWin;
       setLastWin(spinWin);
       setWinningCells(matchedCells);
       setWinningLines(hitLines);
@@ -451,7 +512,11 @@ export default function SlotsGame() {
       setComboMultiplier((prev) => Math.min(5, prev + 1));
 
       addChips(spinWin, 'Slots', `Cosmic Slots Win (+${formatPHP(spinWin)})`);
-      slotsAudio.playLineWin(spinWin >= totalBet * 5);
+      if (hitLines.some((l) => l.isJackpot) || spinWin >= displayJackpot) {
+        slotsAudio.playJackpotWin();
+      } else {
+        slotsAudio.playLineWin(spinWin >= totalBet * 5);
+      }
     } else {
       setLastWin(0);
       setWinTitle('');
@@ -480,6 +545,88 @@ export default function SlotsGame() {
   const stopAutoSpins = () => {
     setAutoSpinCount(0);
   };
+
+  // Consistent reusable symbol card for both static reels and smooth spinning strips
+  const renderSymbolCell = (sym, isWinning = false, key = '') => (
+    <Box
+      key={key}
+      sx={{
+        height: SYMBOL_HEIGHT,
+        minHeight: SYMBOL_HEIGHT,
+        maxHeight: SYMBOL_HEIGHT,
+        width: '100%',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: isWinning
+          ? 'radial-gradient(circle, rgba(250, 204, 21, 0.45) 0%, #17092e 80%)'
+          : sym?.bg || 'rgba(15, 6, 30, 0.85)',
+        borderRadius: { xs: 1.8, sm: 2.5 },
+        border: isWinning
+          ? '2.5px solid #facc15'
+          : `1px solid ${sym?.border || '#334155'}40`,
+        position: 'relative',
+        boxShadow: isWinning
+          ? '0 0 16px rgba(250, 204, 21, 0.7), inset 0 0 12px rgba(250, 204, 21, 0.4)'
+          : 'none',
+        animation: isWinning ? 'symbolWinFlash 1s infinite ease-in-out' : 'none',
+        transition: 'border 0.2s ease, box-shadow 0.2s ease',
+        p: { xs: 0.2, sm: 0.4 },
+        flexShrink: 0,
+      }}
+    >
+      {sym?.image ? (
+        <Box
+          component="img"
+          src={sym.image}
+          alt={sym.name}
+          referrerPolicy="no-referrer"
+          sx={{
+            width: { xs: 44, sm: 64, md: 80, lg: 92 },
+            height: { xs: 44, sm: 64, md: 80, lg: 92 },
+            objectFit: 'contain',
+            transform: isWinning ? 'scale(1.12)' : 'none',
+            filter: isWinning
+              ? 'drop-shadow(0 0 12px #facc15) drop-shadow(0 0 18px #c084fc)'
+              : 'drop-shadow(0 3px 8px rgba(0,0,0,0.7))',
+            transition: 'transform 0.2s ease',
+          }}
+        />
+      ) : (
+        <Typography
+          sx={{
+            fontSize: { xs: '2.1rem', sm: '3.0rem', md: '3.7rem', lg: '4.2rem' },
+            lineHeight: 1,
+            transform: isWinning ? 'scale(1.12)' : 'none',
+            filter: isWinning ? 'drop-shadow(0 0 10px #facc15)' : 'none',
+            transition: 'transform 0.2s ease',
+          }}
+        >
+          {sym?.icon}
+        </Typography>
+      )}
+      <Typography
+        variant="caption"
+        sx={{
+          color: isWinning ? '#fef08a' : sym?.color,
+          fontWeight: 900,
+          fontSize: { xs: '0.50rem', sm: '0.64rem', md: '0.72rem' },
+          mt: { xs: 0.2, sm: 0.4 },
+          lineHeight: 1,
+          letterSpacing: 0.3,
+          textShadow: '0 1px 4px rgba(0,0,0,0.9)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          maxWidth: '96%',
+        }}
+      >
+        {sym?.name}
+      </Typography>
+    </Box>
+  );
 
   return (
     <Box sx={{ width: '100%', maxWidth: { xs: '100%', sm: 1040, md: 1240 }, mx: 'auto', px: { xs: 0.5, sm: 1.5, md: 2 }, py: { xs: 0.8, sm: 1.5, md: 2 } }}>
@@ -660,7 +807,7 @@ export default function SlotsGame() {
             width: '100%',
           }}
         >
-          <Grid container spacing={{ xs: 0.25, sm: 0.6, md: 1 }} justifyContent="center" sx={{ m: 0, width: '100%' }}>
+          <Grid container spacing={{ xs: 0.25, sm: 0.6, md: 1 }} justifyContent="center" sx={{ m: 0, width: '100%', flexWrap: 'nowrap' }}>
             {grid.map((column, colIdx) => {
               const isReelSpinning = spinningReels[colIdx];
               const isReelBouncing = reelsBouncing[colIdx];
@@ -671,161 +818,159 @@ export default function SlotsGame() {
                     sx={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: { xs: 0.35, sm: 0.7, md: 1 },
-                      p: { xs: 0.15, sm: 0.4, md: 0.6 },
+                      py: { xs: '2px', sm: '4px', md: '6px' },
+                      px: { xs: '1.5px', sm: '3px', md: '4px' },
+                      height: REEL_HEIGHT,
+                      minHeight: REEL_HEIGHT,
+                      maxHeight: REEL_HEIGHT,
+                      boxSizing: 'border-box',
                       background: 'rgba(20, 8, 38, 0.88)',
                       borderRadius: { xs: 1.8, sm: 2.5 },
                       borderRight: colIdx < 4 ? '1px solid rgba(192, 132, 252, 0.2)' : 'none',
                       border: isReelSpinning ? '1.5px solid #eab308' : 'none',
                       boxShadow: isReelSpinning ? 'inset 0 0 18px rgba(234, 179, 8, 0.4)' : 'none',
                       overflow: 'hidden',
-                      animation: isReelBouncing ? 'reelSnapBounce 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)' : 'none',
+                      position: 'relative',
                       transition: 'border 0.2s ease',
                     }}
                   >
-                    {column.map((sym, rowIdx) => {
-                      const isWinning = winningCells.has(`${colIdx}-${rowIdx}`);
-
-                      return (
-                        <Box
-                          key={rowIdx}
-                          sx={{
-                            height: { xs: 90, sm: 118, md: 140, lg: 155 },
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: isWinning
-                              ? 'radial-gradient(circle, rgba(250, 204, 21, 0.45) 0%, #17092e 80%)'
-                              : sym.bg || 'rgba(15, 6, 30, 0.85)',
-                            borderRadius: { xs: 1.8, sm: 2.5 },
-                            border: isWinning
-                              ? '2.5px solid #facc15'
-                              : `1px solid ${sym.border || '#334155'}40`,
-                            position: 'relative',
-                            animation: isReelSpinning
-                              ? 'reelSpinBlur 0.12s linear infinite'
-                              : isWinning
-                              ? 'symbolWinFlash 1s infinite ease-in-out'
-                              : 'none',
-                            transition: 'all 0.2s ease',
-                            p: { xs: 0.2, sm: 0.4 },
-                          }}
-                        >
-                          {sym.image ? (
-                            <Box
-                              component="img"
-                              src={sym.image}
-                              alt={sym.name}
-                              referrerPolicy="no-referrer"
-                              sx={{
-                                width: { xs: 46, sm: 68, md: 84, lg: 96 },
-                                height: { xs: 46, sm: 68, md: 84, lg: 96 },
-                                objectFit: 'contain',
-                                transform: isWinning ? 'scale(1.15)' : 'none',
-                                filter: isWinning
-                                  ? 'drop-shadow(0 0 12px #facc15) drop-shadow(0 0 18px #c084fc)'
-                                  : 'drop-shadow(0 3px 8px rgba(0,0,0,0.7))',
-                                transition: 'transform 0.2s ease',
-                              }}
-                            />
-                          ) : (
-                            <Typography
-                              sx={{
-                                fontSize: { xs: '2.4rem', sm: '3.4rem', md: '4.1rem', lg: '4.6rem' },
-                                lineHeight: 1,
-                                transform: isWinning ? 'scale(1.15)' : 'none',
-                                filter: isWinning ? 'drop-shadow(0 0 10px #facc15)' : 'none',
-                                transition: 'transform 0.2s ease',
-                              }}
-                            >
-                              {sym.icon}
-                            </Typography>
-                          )}
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              color: isWinning ? '#fef08a' : sym.color,
-                              fontWeight: 900,
-                              fontSize: { xs: '0.52rem', sm: '0.68rem', md: '0.76rem' },
-                              mt: { xs: 0.2, sm: 0.4 },
-                              lineHeight: 1,
-                              letterSpacing: 0.3,
-                              textShadow: '0 1px 4px rgba(0,0,0,0.9)',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              maxWidth: '96%',
-                            }}
-                          >
-                            {sym.name}
-                          </Typography>
-                        </Box>
-                      );
-                    })}
+                    {isReelSpinning ? (
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: CELL_GAP,
+                          pb: CELL_GAP,
+                          animation: `continuousReelSpin ${isTurbo ? '0.18s' : '0.28s'} linear infinite`,
+                          willChange: 'transform',
+                          width: '100%',
+                        }}
+                      >
+                        {(spinningStrips[colIdx] || [column[0], column[1], column[2], column[0], column[1], column[2]]).map((sym, idx) =>
+                          renderSymbolCell(sym, false, `spin-${colIdx}-${idx}`)
+                        )}
+                      </Box>
+                    ) : (
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: CELL_GAP,
+                          animation: isReelBouncing
+                            ? 'reelMechanicalBounce 0.38s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                            : 'none',
+                          willChange: 'transform',
+                          width: '100%',
+                        }}
+                      >
+                        {column.map((sym, rowIdx) => {
+                          const isWinning = winningCells.has(`${colIdx}-${rowIdx}`);
+                          return renderSymbolCell(sym, isWinning, `static-${colIdx}-${rowIdx}`);
+                        })}
+                      </Box>
+                    )}
                   </Box>
                 </Grid>
               );
             })}
           </Grid>
-        </Box>
 
-        {/* Win Banner Announcement */}
-        {lastWin > 0 && (
-          <Box
-            sx={{
-              mt: 1.5,
-              p: 1.2,
-              borderRadius: 3,
-              background: 'linear-gradient(90deg, rgba(234, 179, 8, 0.3) 0%, rgba(16, 185, 129, 0.35) 100%)',
-              border: '2px solid #fbbf24',
-              boxShadow: '0 0 25px rgba(251, 191, 36, 0.5)',
-              textAlign: 'center',
-              animation: 'bigWinBannerZoom 0.35s ease-out',
-            }}
-          >
-            <Typography
-              variant="h5"
+          {/* 🏆 Compact Winning Notification Overlay Directly Inside the Slot Machine */}
+          {lastWin > 0 && !isSpinning && (
+            <Box
               sx={{
-                fontWeight: 900,
-                color: '#fde047',
-                letterSpacing: 0.5,
-                fontSize: { xs: '1.2rem', sm: '1.6rem' },
-                textShadow: '0 0 10px rgba(253, 224, 71, 0.8)',
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: 35,
+                width: { xs: '88%', sm: 320, md: 360 },
+                maxWidth: '92%',
+                background: 'linear-gradient(135deg, rgba(20, 8, 38, 0.95) 0%, rgba(38, 12, 64, 0.95) 100%)',
+                backdropFilter: 'blur(10px)',
+                borderRadius: { xs: 2.5, sm: 3 },
+                border: '2px solid #facc15',
+                boxShadow: '0 0 30px rgba(250, 204, 21, 0.7), inset 0 0 15px rgba(250, 204, 21, 0.25)',
+                px: { xs: 1.5, sm: 2.2 },
+                py: { xs: 1.2, sm: 1.5 },
+                textAlign: 'center',
+                animation: 'compactWinOverlayPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, compactWinGlow 2.5s infinite ease-in-out',
+                pointerEvents: 'none',
+                userSelect: 'none',
               }}
             >
-              {winTitle} +{formatPHP(lastWin)}
-            </Typography>
+              {/* Header: e.g. ✨ WINNER! +₱10 */}
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 900,
+                  color: '#fde047',
+                  letterSpacing: 0.5,
+                  fontSize: { xs: '1.05rem', sm: '1.25rem' },
+                  textShadow: '0 0 12px rgba(253, 224, 71, 0.9), 0 0 22px rgba(234, 179, 8, 0.6)',
+                  lineHeight: 1.15,
+                  mb: 0.4,
+                }}
+              >
+                {winTitle ? winTitle.replace(/[^\w\s!✨👑🚀💥🌟]/g, '') : '✨ WINNER!'} +{formatPHP(lastWin)}
+              </Typography>
 
-            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.6, flexWrap: 'wrap', mt: 0.5 }}>
-              {winningLines.map((line, idx) => (
-                <Chip
-                  key={idx}
-                  size="small"
-                  avatar={
-                    line.symbolImage ? (
+              {/* Subline(s): e.g. V-Shape: 3x 🔷 (+₱10) */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0.3,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mt: 0.3,
+                }}
+              >
+                {winningLines.slice(0, 3).map((line, idx) => (
+                  <Box
+                    key={idx}
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.6,
+                      color: line.color || '#fbbf24',
+                      fontWeight: 800,
+                      fontSize: { xs: '0.74rem', sm: '0.84rem' },
+                      textShadow: '0 1px 4px rgba(0,0,0,0.9)',
+                    }}
+                  >
+                    <span>{line.name}: {line.count}x</span>
+                    {line.symbolImage ? (
                       <Box
                         component="img"
                         src={line.symbolImage}
                         alt=""
                         referrerPolicy="no-referrer"
-                        sx={{ width: 18, height: 18, objectFit: 'contain' }}
+                        sx={{
+                          width: { xs: 18, sm: 22 },
+                          height: { xs: 18, sm: 22 },
+                          objectFit: 'contain',
+                          filter: 'drop-shadow(0 0 6px rgba(250, 204, 21, 0.7))',
+                        }}
                       />
-                    ) : undefined
-                  }
-                  label={`${line.name}: ${line.count}x ${line.symbolImage ? '' : line.symbolIcon} (+${formatPHP(line.win)})`}
-                  sx={{
-                    bgcolor: 'rgba(15, 6, 30, 0.9)',
-                    color: line.color || '#fbbf24',
-                    border: `1.5px solid ${line.color || '#f59e0b'}`,
-                    fontWeight: 800,
-                    fontSize: '0.68rem',
-                  }}
-                />
-              ))}
+                    ) : (
+                      <span style={{ fontSize: '1rem', lineHeight: 1 }}>{line.symbolIcon}</span>
+                    )}
+                    <span style={{ color: '#34d399', fontWeight: 900 }}>
+                      (+{formatPHP(line.win)})
+                    </span>
+                  </Box>
+                ))}
+
+                {winningLines.length > 3 && (
+                  <Typography variant="caption" sx={{ color: '#c084fc', fontWeight: 800, fontSize: '0.66rem' }}>
+                    +{winningLines.length - 3} more winning line{winningLines.length - 3 > 1 ? 's' : ''}
+                  </Typography>
+                )}
+              </Box>
             </Box>
-          </Box>
-        )}
+          )}
+        </Box>
 
         {/* ========================================================================= */}
         {/* 🎮 4. PRAGMATIC PLAY AUTHENTIC BOTTOM HUD BAR                            */}
@@ -888,43 +1033,129 @@ export default function SlotsGame() {
               </Typography>
             </Box>
 
-            {/* Win Display */}
-            {lastWin > 0 && (
-              <Box sx={{ textAlign: 'left' }}>
-                <Typography variant="caption" sx={{ color: '#34d399', fontWeight: 800, fontSize: '0.62rem', display: 'block' }}>
-                  WIN
-                </Typography>
-                <Typography variant="subtitle1" sx={{ color: '#34d399', fontWeight: 900, fontFamily: 'monospace', lineHeight: 1 }}>
-                  +{formatPHP(lastWin)}
-                </Typography>
-              </Box>
-            )}
+            {/* Win Display (Fixed Width to Prevent Shifting) */}
+            <Box sx={{ textAlign: 'left', minWidth: 65 }}>
+              <Typography variant="caption" sx={{ color: lastWin > 0 ? '#34d399' : '#94a3b8', fontWeight: 800, fontSize: '0.62rem', display: 'block' }}>
+                WIN
+              </Typography>
+              <Typography variant="subtitle1" sx={{ color: lastWin > 0 ? '#34d399' : '#64748b', fontWeight: 900, fontFamily: 'monospace', lineHeight: 1 }}>
+                {lastWin > 0 ? `+${formatPHP(lastWin)}` : '₱0.00'}
+              </Typography>
+            </Box>
           </Box>
 
-          {/* Spin Controls: Minus, Big Center Spin, Plus & Autoplay */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {/* Decrease Bet Button (-) */}
-              <IconButton
-                size="small"
-                onClick={handleDecreaseBet}
-                disabled={isSpinning || LINE_BETS.indexOf(betPerLine) === 0}
-                sx={{
-                  color: '#fff',
-                  bgcolor: 'rgba(255, 255, 255, 0.1)',
-                  border: '1.5px solid #64748b',
-                  width: { xs: 36, sm: 40 },
-                  height: { xs: 36, sm: 40 },
-                  '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.25)' },
-                }}
-              >
-                <RemoveIcon fontSize="small" />
-              </IconButton>
+          {/* Spin Controls: Circular Autoplay, Minus, Big Center Spin, Plus */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, sm: 1.2 } }}>
+            {/* Circular Autoplay Button with Custom Cosmic Design */}
+            <Tooltip
+              title={
+                autoSpinCount > 0
+                  ? `Stop Autoplay (${autoSpinCount} remaining)`
+                  : chips < totalBet
+                  ? 'Insufficient balance for Autoplay'
+                  : 'Autoplay (10 spins)'
+              }
+            >
+              <span>
+                <Box
+                  component="button"
+                  disabled={autoSpinCount === 0 && (isSpinning || chips < totalBet)}
+                  onClick={() => {
+                    if (autoSpinCount > 0) {
+                      stopAutoSpins();
+                    } else {
+                      startAutoSpins(10);
+                    }
+                  }}
+                  sx={{
+                    width: { xs: 38, sm: 44 },
+                    height: { xs: 38, sm: 44 },
+                    borderRadius: '50%',
+                    p: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: autoSpinCount === 0 && (isSpinning || chips < totalBet) ? 'not-allowed' : 'pointer',
+                    background:
+                      autoSpinCount > 0
+                        ? 'radial-gradient(circle at 35% 35%, #dc2626 0%, #991b1b 70%, #450a0a 100%)'
+                        : 'radial-gradient(circle at 35% 35%, #3b1464 0%, #1e0b36 70%, #0d041a 100%)',
+                    border: autoSpinCount > 0 ? '2px solid #f87171' : '1.5px solid #a855f7',
+                    boxShadow:
+                      autoSpinCount > 0
+                        ? '0 0 18px rgba(239, 68, 68, 0.85), inset 0 0 10px rgba(254, 202, 202, 0.4)'
+                        : '0 0 12px rgba(168, 85, 247, 0.45), inset 0 0 8px rgba(168, 85, 247, 0.25)',
+                    animation: autoSpinCount > 0 ? 'autoplayActivePulse 1.5s infinite ease-in-out' : 'none',
+                    transition: 'all 0.2s ease',
+                    outline: 'none',
+                    '&:hover:not(:disabled)': {
+                      transform: 'scale(1.08)',
+                      border: autoSpinCount > 0 ? '2px solid #fca5a5' : '1.5px solid #c084fc',
+                      boxShadow:
+                        autoSpinCount > 0
+                          ? '0 0 25px rgba(239, 68, 68, 1), inset 0 0 14px rgba(254, 202, 202, 0.6)'
+                          : '0 0 22px rgba(192, 132, 252, 0.75), inset 0 0 10px rgba(192, 132, 252, 0.4)',
+                    },
+                    '&:active:not(:disabled)': {
+                      transform: 'scale(0.94)',
+                    },
+                    '&:disabled': {
+                      opacity: 0.4,
+                      cursor: 'not-allowed',
+                      borderColor: '#475569',
+                    },
+                  }}
+                >
+                  <AutoModeIcon
+                    sx={{
+                      fontSize: { xs: 17, sm: 20 },
+                      color: autoSpinCount > 0 ? '#fff' : '#c084fc',
+                      animation: autoSpinCount > 0 ? 'pragmaticSpin 2s linear infinite' : 'none',
+                      filter:
+                        autoSpinCount > 0
+                          ? 'drop-shadow(0 0 6px #fff)'
+                          : 'drop-shadow(0 0 5px rgba(192, 132, 252, 0.7))',
+                    }}
+                  />
+                  <Typography
+                    sx={{
+                      fontSize: { xs: '0.45rem', sm: '0.52rem' },
+                      fontWeight: 900,
+                      letterSpacing: 0.5,
+                      color: autoSpinCount > 0 ? '#fef08a' : '#e9d5ff',
+                      lineHeight: 1,
+                      mt: 0.1,
+                    }}
+                  >
+                    {autoSpinCount > 0 ? `${autoSpinCount}x` : 'AUTO'}
+                  </Typography>
+                </Box>
+              </span>
+            </Tooltip>
 
-              {/* Large Pragmatic Style Spin Button */}
+            {/* Decrease Bet Button (-) */}
+            <IconButton
+              size="small"
+              onClick={handleDecreaseBet}
+              disabled={isSpinning || LINE_BETS.indexOf(betPerLine) === 0}
+              sx={{
+                color: '#fff',
+                bgcolor: 'rgba(255, 255, 255, 0.1)',
+                border: '1.5px solid #64748b',
+                width: { xs: 36, sm: 40 },
+                height: { xs: 36, sm: 40 },
+                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.25)' },
+              }}
+            >
+              <RemoveIcon fontSize="small" />
+            </IconButton>
+
+            {/* Large Pragmatic Style Spin Button with Quick-Stop feature */}
+            <Tooltip title={isSpinning ? 'Tap to Quick Stop Reels' : chips < totalBet ? 'Insufficient Balance' : `Spin (${formatPHP(totalBet)})`}>
               <Box
                 component="button"
-                disabled={isSpinning || chips < totalBet}
+                disabled={!isSpinning && chips < totalBet}
                 onClick={handleSpin}
                 sx={{
                   width: { xs: 66, sm: 76 },
@@ -932,10 +1163,12 @@ export default function SlotsGame() {
                   borderRadius: '50%',
                   border: '3px solid #facc15',
                   background: isSpinning
-                    ? 'radial-gradient(circle, #3b0764 0%, #1e1b4b 100%)'
+                    ? 'radial-gradient(circle, #7e22ce 0%, #3b0764 60%, #1e1b4b 100%)'
                     : 'radial-gradient(circle, #9333ea 0%, #4c1d95 60%, #1e1b4b 100%)',
-                  boxShadow: '0 0 25px rgba(245, 158, 11, 0.6), inset 0 0 15px rgba(250, 204, 21, 0.4)',
-                  cursor: isSpinning || chips < totalBet ? 'not-allowed' : 'pointer',
+                  boxShadow: isSpinning
+                    ? '0 0 30px rgba(234, 179, 8, 0.85), inset 0 0 18px rgba(250, 204, 21, 0.6)'
+                    : '0 0 25px rgba(245, 158, 11, 0.6), inset 0 0 15px rgba(250, 204, 21, 0.4)',
+                  cursor: (!isSpinning && chips < totalBet) ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -951,76 +1184,34 @@ export default function SlotsGame() {
                 }}
               >
                 {isSpinning ? (
-                  <StopIcon sx={{ fontSize: { xs: 32, sm: 38 }, color: '#facc15', animation: 'pragmaticSpin 1s linear infinite' }} />
+                  <StopIcon sx={{ fontSize: { xs: 34, sm: 40 }, color: '#facc15' }} />
                 ) : (
                   <CasinoIcon sx={{ fontSize: { xs: 34, sm: 40 }, color: '#fef08a' }} />
                 )}
               </Box>
+            </Tooltip>
 
-              {/* Increase Bet Button (+) */}
-              <IconButton
-                size="small"
-                onClick={handleIncreaseBet}
-                disabled={isSpinning || LINE_BETS.indexOf(betPerLine) === LINE_BETS.length - 1}
-                sx={{
-                  color: '#fff',
-                  bgcolor: 'rgba(255, 255, 255, 0.1)',
-                  border: '1.5px solid #64748b',
-                  width: { xs: 36, sm: 40 },
-                  height: { xs: 36, sm: 40 },
-                  '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.25)' },
-                }}
-              >
-                <AddIcon fontSize="small" />
-              </IconButton>
-            </Box>
-
-            {/* Autoplay Pill underneath spin button */}
-            {autoSpinCount > 0 ? (
-              <Button
-                size="small"
-                variant="contained"
-                color="error"
-                onClick={stopAutoSpins}
-                startIcon={<AutoModeIcon sx={{ fontSize: 14 }} />}
-                sx={{
-                  fontWeight: 900,
-                  py: 0.2,
-                  px: 1.5,
-                  fontSize: '0.65rem',
-                  borderRadius: 2,
-                  height: 24,
-                }}
-              >
-                STOP AUTOPLAY ({autoSpinCount})
-              </Button>
-            ) : (
-              <Button
-                size="small"
-                onClick={() => startAutoSpins(10)}
-                disabled={isSpinning || chips < totalBet}
-                startIcon={<AutoModeIcon sx={{ fontSize: 14 }} />}
-                sx={{
-                  fontWeight: 900,
-                  py: 0.2,
-                  px: 1.5,
-                  fontSize: '0.65rem',
-                  borderRadius: 2,
-                  bgcolor: 'rgba(255, 255, 255, 0.08)',
-                  color: '#cbd5e1',
-                  border: '1px solid #475569',
-                  height: 24,
-                  '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.18)' },
-                }}
-              >
-                AUTOPLAY
-              </Button>
-            )}
+            {/* Increase Bet Button (+) */}
+            <IconButton
+              size="small"
+              onClick={handleIncreaseBet}
+              disabled={isSpinning || LINE_BETS.indexOf(betPerLine) === LINE_BETS.length - 1}
+              sx={{
+                color: '#fff',
+                bgcolor: 'rgba(255, 255, 255, 0.1)',
+                border: '1.5px solid #64748b',
+                width: { xs: 36, sm: 40 },
+                height: { xs: 36, sm: 40 },
+                '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.25)' },
+              }}
+            >
+              <AddIcon fontSize="small" />
+            </IconButton>
           </Box>
         </Box>
 
         {/* ========================================================================= */}
-        {/* 🎰 5. PAYLINES & LINE BET (BELOW AUTOPLAY BUTTON)                        */}
+        {/* 🎰 5. PAYLINES, LINE BET & MAX BET (BELOW AUTOPLAY BUTTON)                */}
         {/* ========================================================================= */}
         <Box
           sx={{
@@ -1031,7 +1222,7 @@ export default function SlotsGame() {
             flexDirection: { xs: 'column', md: 'row' },
             alignItems: 'center',
             justifyContent: 'center',
-            gap: { xs: 0.8, sm: 2 },
+            gap: { xs: 0.8, sm: 1.5, md: 2 },
             width: '100%',
           }}
         >
@@ -1046,9 +1237,11 @@ export default function SlotsGame() {
                 size="small"
                 variant={selectedLinesCount === cnt ? 'contained' : 'outlined'}
                 onClick={() => {
+                  if (isSpinning) return;
                   setSelectedLinesCount(cnt);
                   slotsAudio.playChipClick();
                 }}
+                disabled={isSpinning}
                 sx={{
                   fontWeight: 900,
                   minWidth: 0,
@@ -1077,11 +1270,13 @@ export default function SlotsGame() {
                 key={amt}
                 size="small"
                 label={formatPHP(amt)}
-                clickable
+                clickable={!isSpinning}
                 onClick={() => {
+                  if (isSpinning) return;
                   setBetPerLine(amt);
                   slotsAudio.playChipClick();
                 }}
+                disabled={isSpinning}
                 sx={{
                   fontWeight: 900,
                   fontSize: { xs: '0.68rem', sm: '0.75rem' },
@@ -1094,6 +1289,30 @@ export default function SlotsGame() {
               />
             ))}
           </Box>
+
+          {/* MAX BET Button */}
+          <Button
+            size="small"
+            variant="contained"
+            onClick={handleMaxBet}
+            disabled={isSpinning || chips < (LINE_BETS[LINE_BETS.length - 1] * 5)}
+            sx={{
+              fontWeight: 900,
+              minWidth: 0,
+              px: { xs: 1.4, sm: 2 },
+              py: 0.35,
+              fontSize: { xs: '0.68rem', sm: '0.75rem' },
+              borderRadius: 2,
+              background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
+              color: '#fff',
+              border: '1.5px solid #f87171',
+              boxShadow: '0 0 12px rgba(239, 68, 68, 0.45)',
+              '&:hover': { background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)', transform: 'scale(1.03)' },
+              '&:disabled': { opacity: 0.5 },
+            }}
+          >
+            🔥 MAX BET ({formatPHP(LINE_BETS[LINE_BETS.length - 1] * 5)})
+          </Button>
         </Box>
       </Paper>
 

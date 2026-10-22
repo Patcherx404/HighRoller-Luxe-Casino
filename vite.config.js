@@ -1,5 +1,245 @@
 import { defineConfig, transformWithEsbuild } from 'vite';
 import react from '@vitejs/plugin-react';
+import { MongoClient, ObjectId } from 'mongodb';
+import crypto from 'crypto';
+
+const MONGODB_URI =
+  process.env.MONGODB_URI ||
+  'mongodb+srv://Vercel-Admin-HIGHROLLER:FSBV2A58PpzALcqU@highroller.d8jezy5.mongodb.net/?retryWrites=true&w=majority';
+
+let devMongoClient;
+async function getDevMongoDb() {
+  if (!devMongoClient) {
+    devMongoClient = new MongoClient(MONGODB_URI, {
+      appName: 'devrel.vercel.integration',
+      maxIdleTimeMS: 5000,
+    });
+    await devMongoClient.connect();
+  }
+  return devMongoClient.db('highroller');
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return { hash, salt };
+}
+
+function verifyPassword(password, hash, salt) {
+  const verify = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return hash === verify;
+}
+
+// MongoDB Local Dev Server Auth Middleware Plugin
+function mongoAuthDevPlugin() {
+  return {
+    name: 'mongo-auth-dev-api',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        // 1. Registration endpoint
+        if (req.url === '/api/auth/register' && req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk) => (body += chunk));
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json');
+            try {
+              const { username, password, phone } = JSON.parse(body || '{}');
+              const cleanUser = String(username || '').trim();
+              if (!cleanUser || cleanUser.length < 3 || cleanUser.length > 30) {
+                res.statusCode = 400;
+                return res.end(
+                  JSON.stringify({ success: false, error: 'Username must be 3-30 characters long.' })
+                );
+              }
+
+              // Validate Philippine mobile number: must start with 09 and be 11 digits
+              const cleanPhone = String(phone || '').trim().replace(/[-\s]/g, '');
+              const phoneRegex = /^09\d{9}$/;
+              if (!phoneRegex.test(cleanPhone)) {
+                res.statusCode = 400;
+                return res.end(
+                  JSON.stringify({
+                    success: false,
+                    error: 'Mobile number must start with 09 and be exactly 11 digits (e.g. 09171234567).',
+                  })
+                );
+              }
+
+              const cleanPassword = String(password || '');
+              if (!cleanPassword || cleanPassword.length < 6) {
+                res.statusCode = 400;
+                return res.end(
+                  JSON.stringify({ success: false, error: 'Password must be at least 6 characters long.' })
+                );
+              }
+
+              const db = await getDevMongoDb();
+              const users = db.collection('users');
+
+              const existingUser = await users.findOne({
+                username: { $regex: new RegExp(`^${cleanUser}$`, 'i') },
+              });
+              if (existingUser) {
+                res.statusCode = 409;
+                return res.end(
+                  JSON.stringify({ success: false, error: 'Username is already taken. Please choose another.' })
+                );
+              }
+
+              const existingPhone = await users.findOne({ phone: cleanPhone });
+              if (existingPhone) {
+                res.statusCode = 409;
+                return res.end(
+                  JSON.stringify({ success: false, error: 'Mobile number is already registered. Please log in.' })
+                );
+              }
+
+              const { hash, salt } = hashPassword(cleanPassword);
+              const initialChips = 1000;
+              const doc = {
+                username: cleanUser,
+                phone: cleanPhone,
+                passwordHash: hash,
+                salt: salt,
+                chips: initialChips,
+                vipTier: 'Bronze',
+                createdAt: new Date().toISOString(),
+                lastLoginAt: new Date().toISOString(),
+              };
+
+              const result = await users.insertOne(doc);
+              res.statusCode = 201;
+              return res.end(
+                JSON.stringify({
+                  success: true,
+                  message: 'Registration successful! Welcome to Luxe Highroller Casino.',
+                  user: {
+                    id: result.insertedId.toString(),
+                    username: cleanUser,
+                    phone: cleanPhone,
+                    chips: initialChips,
+                    vipTier: 'Bronze',
+                    createdAt: doc.createdAt,
+                  },
+                })
+              );
+            } catch (err) {
+              res.statusCode = 500;
+              return res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+          });
+          return;
+        }
+
+        // 2. Login endpoint
+        if (req.url === '/api/auth/login' && req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk) => (body += chunk));
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json');
+            try {
+              const { identifier, password } = JSON.parse(body || '{}');
+              const cleanId = String(identifier || '').trim();
+              const cleanPassword = String(password || '');
+
+              if (!cleanId || !cleanPassword) {
+                res.statusCode = 400;
+                return res.end(
+                  JSON.stringify({ success: false, error: 'Please enter username/mobile number and password.' })
+                );
+              }
+
+              const db = await getDevMongoDb();
+              const users = db.collection('users');
+
+              const user = await users.findOne({
+                $or: [
+                  { username: { $regex: new RegExp(`^${cleanId}$`, 'i') } },
+                  { phone: cleanId.replace(/[-\s]/g, '') },
+                ],
+              });
+
+              if (!user || !user.passwordHash || !user.salt) {
+                res.statusCode = 401;
+                return res.end(
+                  JSON.stringify({ success: false, error: 'Invalid username, mobile number, or password.' })
+                );
+              }
+
+              const isValid = verifyPassword(cleanPassword, user.passwordHash, user.salt);
+              if (!isValid) {
+                res.statusCode = 401;
+                return res.end(
+                  JSON.stringify({ success: false, error: 'Invalid username, mobile number, or password.' })
+                );
+              }
+
+              await users.updateOne(
+                { _id: user._id },
+                { $set: { lastLoginAt: new Date().toISOString() } }
+              );
+
+              return res.end(
+                JSON.stringify({
+                  success: true,
+                  message: `Welcome back, ${user.username}!`,
+                  user: {
+                    id: user._id.toString(),
+                    username: user.username,
+                    phone: user.phone,
+                    chips: typeof user.chips === 'number' ? user.chips : Number(user.chips) || 0,
+                    vipTier: user.vipTier || 'Bronze',
+                    createdAt: user.createdAt,
+                  },
+                })
+              );
+            } catch (err) {
+              res.statusCode = 500;
+              return res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+          });
+          return;
+        }
+
+        // 3. Update chips endpoint
+        if (req.url === '/api/auth/update-chips' && req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk) => (body += chunk));
+          req.on('end', async () => {
+            res.setHeader('Content-Type', 'application/json');
+            try {
+              const { userId, chips } = JSON.parse(body || '{}');
+              if (!userId || typeof chips !== 'number') {
+                res.statusCode = 400;
+                return res.end(JSON.stringify({ success: false, error: 'Missing userId or chips' }));
+              }
+              const db = await getDevMongoDb();
+              const users = db.collection('users');
+              let query;
+              try {
+                query = { _id: new ObjectId(userId) };
+              } catch (_) {
+                query = { _id: userId };
+              }
+              await users.updateOne(query, {
+                $set: {
+                  chips: Math.max(0, Math.round(chips * 100) / 100),
+                  updatedAt: new Date().toISOString(),
+                },
+              });
+              return res.end(JSON.stringify({ success: true, chips }));
+            } catch (err) {
+              res.statusCode = 500;
+              return res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+          });
+          return;
+        }
+
+        next();
+      });
+    },
+  };
+}
 
 const AUTH_HEADER =
   'Basic c2tfbGl2ZV9EVU41YlczcGFSdzU0VWpoWGZDSGRkVGs6cGtfbGl2ZV9QdHoxZGsySDJVSlFNSjN6TVFEdjF3N1U=';
@@ -183,6 +423,7 @@ export default defineConfig({
     },
     react(),
     paymongoDevPlugin(),
+    mongoAuthDevPlugin(),
   ],
   optimizeDeps: {
     force: true,

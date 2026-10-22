@@ -140,6 +140,100 @@ class SlotsAudioEngine {
     osc.start(now);
     osc.stop(now + 0.06);
   }
+
+  // 5. Continuous Realistic Reel Spinning Whir
+  startSpinLoop() {
+    if (this.isMuted) return;
+    const ctx = this.initContext();
+    if (!ctx) return;
+    this.stopSpinLoop();
+
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(110, now);
+
+      lfo.type = 'sawtooth';
+      lfo.frequency.setValueAtTime(18, now);
+      lfoGain.gain.setValueAtTime(22, now);
+      lfo.connect(osc.frequency);
+      lfo.start(now);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.07, now + 0.08);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+
+      this.spinLoopNode = { osc, gain, lfo, lfoGain };
+    } catch {
+      // ignore
+    }
+  }
+
+  stopSpinLoop() {
+    if (this.spinLoopNode && this.ctx) {
+      try {
+        const now = this.ctx.currentTime;
+        this.spinLoopNode.gain.gain.linearRampToValueAtTime(0.001, now + 0.1);
+        this.spinLoopNode.osc.stop(now + 0.12);
+        this.spinLoopNode.lfo.stop(now + 0.12);
+      } catch {
+        // ignore
+      }
+      this.spinLoopNode = null;
+    }
+  }
+
+  // 6. Max Bet Power Chime
+  playMaxBet() {
+    if (this.isMuted) return;
+    const ctx = this.initContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.04);
+      gain.gain.setValueAtTime(0.2, now + idx * 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.2);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.04);
+      osc.stop(now + idx * 0.04 + 0.22);
+    });
+  }
+
+  // 7. Grand Cosmic Jackpot Celebratory Fanfare
+  playJackpotWin() {
+    if (this.isMuted) return;
+    const ctx = this.initContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const fanfareNotes = [523.25, 659.25, 783.99, 1046.5, 1318.51, 1567.98, 2093.0];
+    fanfareNotes.forEach((freq, idx) => {
+      const start = now + idx * 0.08;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.3, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.6);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.65);
+    });
+  }
 }
 
 export const slotsAudio = new SlotsAudioEngine();
