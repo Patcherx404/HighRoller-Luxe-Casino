@@ -145,7 +145,7 @@ export default function AdminConsole() {
     setIsSaving(true);
     try {
       await updateCasinoConfig(rates);
-      toast.success('🎉 Casino win rates updated and synced live to Firestore!');
+      toast.success('🎉 Cosmic Slots & Casino win rates synced live to MongoDB Atlas & Cloud Firestore!');
     } catch (err) {
       toast.error('Failed to update config: ' + err.message);
     } finally {
@@ -213,11 +213,23 @@ export default function AdminConsole() {
             </Box>
           </Box>
 
-          <Chip
-            icon={<CheckCircleIcon sx={{ color: '#10b981 !important' }} />}
-            label={`Super-Admin: ${ADMIN_EMAIL}`}
-            sx={{ bgcolor: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid #10b981', fontWeight: 800 }}
-          />
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Chip
+              icon={<CheckCircleIcon sx={{ color: '#10b981 !important' }} />}
+              label="MongoDB Atlas Synced"
+              sx={{ bgcolor: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid #10b981', fontWeight: 800 }}
+            />
+            <Chip
+              icon={<CheckCircleIcon sx={{ color: '#38bdf8 !important' }} />}
+              label="Firestore Live"
+              sx={{ bgcolor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid #38bdf8', fontWeight: 800 }}
+            />
+            <Chip
+              icon={<CheckCircleIcon sx={{ color: '#fbbf24 !important' }} />}
+              label={`Admin: ${ADMIN_EMAIL}`}
+              sx={{ bgcolor: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid #f59e0b', fontWeight: 800 }}
+            />
+          </Box>
         </Box>
       </Paper>
 
@@ -553,13 +565,13 @@ export default function AdminConsole() {
 
             <Box sx={{ mt: 1.5, p: 1, bgcolor: 'rgba(2, 6, 23, 0.7)', borderRadius: 2, border: '1px solid #1e293b' }}>
               <Typography variant="caption" sx={{ color: '#38bdf8', fontWeight: 800, display: 'block' }}>
-                🎯 Mathematical Accuracy: Exactly {rates.slotsWinRate}% of spins generate winning paylines. House retains {100 - rates.slotsWinRate}%.
+                🎯 Mathematical Win Rate Engine: Exactly {rates.slotsWinRate}% of all spins generate winning paylines.
               </Typography>
             </Box>
 
-            <Box sx={{ mt: 1, p: 1, bgcolor: 'rgba(239, 68, 68, 0.12)', borderRadius: 2, border: '1px solid rgba(239, 68, 68, 0.35)' }}>
-              <Typography variant="caption" sx={{ color: '#f87171', fontWeight: 800, display: 'block' }}>
-                🛡️ Bankroll Protection Active: When a player reaches ₱400 (balance or accumulated wins), the win rate automatically throttles down to 8% to protect the house bankroll.
+            <Box sx={{ mt: 1, p: 1, bgcolor: 'rgba(16, 185, 129, 0.12)', borderRadius: 2, border: '1px solid rgba(16, 185, 129, 0.35)' }}>
+              <Typography variant="caption" sx={{ color: '#34d399', fontWeight: 800, display: 'block' }}>
+                💾 Dual-Sync Engine: When saved, Cosmic Slots Deluxe win rate persists directly to MongoDB Atlas (<code>casino_config</code>) and Cloud Firestore in real time.
               </Typography>
             </Box>
           </Paper>
@@ -774,7 +786,7 @@ export default function AdminConsole() {
               boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)',
             }}
           >
-            {isSaving ? 'Saving to Firestore...' : 'Save & Push Live to Casino'}
+            {isSaving ? 'Syncing to MongoDB & Firestore...' : 'Save & Sync Live (MongoDB + Firestore)'}
           </Button>
         </Box>
       </Box>

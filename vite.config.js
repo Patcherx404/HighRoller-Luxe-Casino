@@ -256,6 +256,88 @@ function mongoAuthDevPlugin() {
           return;
         }
 
+        // 4. Casino Win Rates Config Endpoint (Synced to MongoDB collection: casino_config)
+        if (req.url === '/api/casino/config' || req.url?.startsWith('/api/casino/config?')) {
+          if (req.method === 'GET') {
+            res.setHeader('Content-Type', 'application/json');
+            try {
+              const db = await getDevMongoDb();
+              const configCol = db.collection('casino_config');
+              const doc = await configCol.findOne({ _id: 'winrates' });
+              if (doc) {
+                return res.end(
+                  JSON.stringify({
+                    success: true,
+                    config: {
+                      slotsWinRate: typeof doc.slotsWinRate === 'number' ? doc.slotsWinRate : 32,
+                      blackjackWinRate: typeof doc.blackjackWinRate === 'number' ? doc.blackjackWinRate : 38,
+                      rouletteWinRate: typeof doc.rouletteWinRate === 'number' ? doc.rouletteWinRate : 36,
+                      pokerWinRate: typeof doc.pokerWinRate === 'number' ? doc.pokerWinRate : 35,
+                      updatedAt: doc.updatedAt,
+                      updatedBy: doc.updatedBy,
+                    },
+                  })
+                );
+              }
+              return res.end(
+                JSON.stringify({
+                  success: true,
+                  config: {
+                    slotsWinRate: 32,
+                    blackjackWinRate: 38,
+                    rouletteWinRate: 36,
+                    pokerWinRate: 35,
+                  },
+                })
+              );
+            } catch (err) {
+              res.statusCode = 500;
+              return res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+          }
+
+          if (req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              res.setHeader('Content-Type', 'application/json');
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const cleanSlots = Math.max(1, Math.min(100, Number(parsed.slotsWinRate) || 50));
+                const cleanBJ = Math.max(1, Math.min(100, Number(parsed.blackjackWinRate) || 50));
+                const cleanRoulette = Math.max(1, Math.min(100, Number(parsed.rouletteWinRate) || 50));
+                const cleanPoker = Math.max(1, Math.min(100, Number(parsed.pokerWinRate) || 50));
+
+                const payload = {
+                  _id: 'winrates',
+                  slotsWinRate: cleanSlots,
+                  blackjackWinRate: cleanBJ,
+                  rouletteWinRate: cleanRoulette,
+                  pokerWinRate: cleanPoker,
+                  updatedAt: new Date().toISOString(),
+                  updatedBy: parsed.updatedBy || 'patcherx500@gmail.com',
+                };
+
+                const db = await getDevMongoDb();
+                const configCol = db.collection('casino_config');
+                await configCol.updateOne({ _id: 'winrates' }, { $set: payload }, { upsert: true });
+
+                return res.end(
+                  JSON.stringify({
+                    success: true,
+                    message: 'Casino win rates synced to MongoDB successfully',
+                    config: payload,
+                  })
+                );
+              } catch (err) {
+                res.statusCode = 500;
+                return res.end(JSON.stringify({ success: false, error: err.message }));
+              }
+            });
+            return;
+          }
+        }
+
         next();
       });
     },

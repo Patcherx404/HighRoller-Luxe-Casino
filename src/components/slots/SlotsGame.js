@@ -307,13 +307,8 @@ export default function SlotsGame() {
     timeoutsRef.current = [];
 
     // Precise Mathematical Win Rate Engine:
-    // Respects casinoConfig.slotsWinRate (Default: 32% tight house edge)
-    const baseWinRate = Math.max(1, Math.min(100, Number(casinoConfig?.slotsWinRate ?? 32)));
-
-    // 🛡️ Bankroll Protection: If the user reaches 400 pesos (balance >= 400 or total accumulated wins >= 400),
-    // lower the win rate to 8%
-    const hasReached400 = chips >= 400 || (sessionWinsRef.current >= 400);
-    const targetWinRate = hasReached400 ? 8 : baseWinRate;
+    // Directly respects casinoConfig.slotsWinRate (synced from MongoDB Atlas & Cloud Firestore)
+    const targetWinRate = Math.max(1, Math.min(100, Number(casinoConfig?.slotsWinRate ?? 32)));
     const willWin = (Math.random() * 100) < targetWinRate;
 
     // Generate natural, organic 5x3 randomized grid
@@ -334,8 +329,23 @@ export default function SlotsGame() {
         // Pick an active payline
         const luckyLine = activeLines[Math.floor(Math.random() * activeLines.length)];
         const rWeight = Math.random();
-        const luckySym = rWeight < 0.4 ? SYMBOLS[6] : rWeight < 0.7 ? SYMBOLS[5] : rWeight < 0.88 ? SYMBOLS[4] : rWeight < 0.96 ? SYMBOLS[3] : SYMBOLS[2];
-        const matchLen = Math.random() < 0.8 ? 3 : Math.random() < 0.95 ? 4 : 5;
+        const luckySym =
+          rWeight < 0.35
+            ? SYMBOLS[6] // Emerald 🟢
+            : rWeight < 0.65
+            ? SYMBOLS[5] // Sapphire 🔷
+            : rWeight < 0.82
+            ? SYMBOLS[4] // Ruby 💎
+            : rWeight < 0.92
+            ? SYMBOLS[3] // Satellite 🛰️
+            : rWeight < 0.98
+            ? SYMBOLS[2] // UFO 🛸
+            : SYMBOLS[1]; // Alien 👽
+
+        const matchLen =
+          targetWinRate >= 80
+            ? (Math.random() < 0.35 ? 5 : Math.random() < 0.75 ? 4 : 3)
+            : (Math.random() < 0.75 ? 3 : Math.random() < 0.95 ? 4 : 5);
 
         for (let i = 0; i < matchLen; i++) {
           const [c, r] = luckyLine.coords[i];
@@ -345,6 +355,12 @@ export default function SlotsGame() {
           const [c, r] = luckyLine.coords[matchLen];
           const diffSym = SYMBOLS.find((s) => s.id !== luckySym.id && !s.isWild);
           finalGrid[c][r] = diffSym || SYMBOLS[7];
+        }
+
+        // Generous Wild Star boost for high win rates set by admin
+        if (targetWinRate >= 70 && Math.random() < 0.25) {
+          const [c0, r0] = luckyLine.coords[0];
+          finalGrid[c0][r0] = SYMBOLS[0]; // Wild Star ⭐
         }
       }
     } else {

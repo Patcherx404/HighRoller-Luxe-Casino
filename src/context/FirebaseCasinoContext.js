@@ -164,8 +164,27 @@ export const FirebaseCasinoProvider = ({ children }) => {
     return () => unsub();
   }, []);
 
-  // Sync casino win rates configuration from Firestore in real time
+  // Sync casino win rates configuration from MongoDB and Firestore
   useEffect(() => {
+    // 1. Initial fetch from MongoDB casino_config collection
+    fetch('/api/casino/config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.config) {
+          setCasinoConfig((prev) => ({
+            ...prev,
+            slotsWinRate: typeof data.config.slotsWinRate === 'number' ? data.config.slotsWinRate : prev.slotsWinRate,
+            blackjackWinRate: typeof data.config.blackjackWinRate === 'number' ? data.config.blackjackWinRate : prev.blackjackWinRate,
+            rouletteWinRate: typeof data.config.rouletteWinRate === 'number' ? data.config.rouletteWinRate : prev.rouletteWinRate,
+            pokerWinRate: typeof data.config.pokerWinRate === 'number' ? data.config.pokerWinRate : prev.pokerWinRate,
+          }));
+        }
+      })
+      .catch((err) => {
+        console.warn('MongoDB initial config fetch error:', err);
+      });
+
+    // 2. Real-time listener from Cloud Firestore
     const configRef = doc(db, 'casino_config', 'winrates');
     const unsub = onSnapshot(
       configRef,
@@ -672,7 +691,6 @@ export const FirebaseCasinoProvider = ({ children }) => {
       if (!isAdmin) {
         throw new Error('Unauthorized: Only patcherx500@gmail.com can adjust casino win rates.');
       }
-      const configRef = doc(db, 'casino_config', 'winrates');
       const payload = {
         id: 'winrates',
         slotsWinRate: Math.max(1, Math.min(100, Number(newConfig.slotsWinRate) ?? 50)),
@@ -680,16 +698,32 @@ export const FirebaseCasinoProvider = ({ children }) => {
         rouletteWinRate: Math.max(1, Math.min(100, Number(newConfig.rouletteWinRate) ?? 50)),
         pokerWinRate: Math.max(1, Math.min(100, Number(newConfig.pokerWinRate) ?? 50)),
         updatedAt: new Date().toISOString(),
-        updatedBy: firebaseUser?.email || ADMIN_EMAIL,
+        updatedBy: firebaseUser?.email || mongoUser?.username || ADMIN_EMAIL,
       };
+
+      // 1. Save to Cloud Firestore
+      const configRef = doc(db, 'casino_config', 'winrates');
       await setDoc(configRef, payload, { merge: true });
+
+      // 2. Sync to MongoDB Atlas (casino_config collection)
+      try {
+        await fetch('/api/casino/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } catch (mongoErr) {
+        console.warn('MongoDB winrates sync warning:', mongoErr);
+      }
+
+      // 3. Update local state and fallback cache
       setCasinoConfig(payload);
       try {
         localStorage.setItem('casino_global_winrates', JSON.stringify(payload));
       } catch (e) {}
       return true;
     },
-    [isAdmin, firebaseUser]
+    [isAdmin, firebaseUser, mongoUser]
   );
 
   return (
