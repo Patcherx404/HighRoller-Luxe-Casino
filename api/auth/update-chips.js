@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { userId, chips, hasDeposited, depositCount } = req.body || {};
+    const { userId, chips, hasDeposited, depositCount, firstDepositBonusEligible } = req.body || {};
     if (!userId || typeof chips !== 'number') {
       return res.status(400).json({ success: false, error: 'Missing userId or chips amount' });
     }
@@ -32,6 +32,9 @@ export default async function handler(req, res) {
     }
     if (typeof depositCount === 'number') {
       setPayload.depositCount = depositCount;
+    }
+    if (typeof firstDepositBonusEligible === 'boolean') {
+      setPayload.firstDepositBonusEligible = firstDepositBonusEligible;
     }
 
     const result = await usersCollection.updateOne(

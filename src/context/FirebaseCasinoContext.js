@@ -54,7 +54,15 @@ export const FirebaseCasinoProvider = ({ children }) => {
   const [mongoUser, setMongoUser] = useState(() => {
     try {
       const saved = localStorage.getItem('mongo_casino_user');
-      return saved ? JSON.parse(saved) : null;
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      if (parsed) {
+        const hasDep = Boolean(parsed.hasDeposited || (Number(parsed.depositCount) > 0) || parsed.firstDepositBonusEligible === false);
+        parsed.hasDeposited = hasDep;
+        parsed.depositCount = Number(parsed.depositCount) || (hasDep ? 1 : 0);
+        parsed.firstDepositBonusEligible = !hasDep;
+      }
+      return parsed;
     } catch {
       return null;
     }
@@ -78,18 +86,22 @@ export const FirebaseCasinoProvider = ({ children }) => {
   const [firebaseHasDeposited, setFirebaseHasDeposited] = useState(false);
   const [guestHasDeposited, setGuestHasDeposited] = useState(() => {
     try {
-      return localStorage.getItem('casino_guest_has_deposited') === 'true';
+      const val = localStorage.getItem('casino_guest_has_deposited') === 'true';
+      const count = Number(localStorage.getItem('casino_guest_deposit_count')) || 0;
+      return val || count > 0;
     } catch {
       return false;
     }
   });
 
+  // User requirement: 2X bonus ONLY appears and applies on the VERY FIRST deposit.
+  // If user has deposited even once (second deposit onward), no more bonus!
   const isFirstDepositEligible = Boolean(
     mongoUser
-      ? !mongoUser.hasDeposited
+      ? (!mongoUser.hasDeposited && (Number(mongoUser.depositCount) || 0) === 0 && mongoUser.firstDepositBonusEligible !== false)
       : firebaseUser
-      ? !firebaseHasDeposited
-      : !guestHasDeposited
+      ? (!firebaseHasDeposited)
+      : (!guestHasDeposited)
   );
 
   const [transactions, setTransactions] = useState([]);
@@ -233,7 +245,13 @@ export const FirebaseCasinoProvider = ({ children }) => {
               // Sync strictly to the authenticated user's private balance (defaults to 0)
               const userBalance = typeof data.chips === 'number' ? data.chips : (Number(data.chips) || 0);
               setChips(userBalance);
-              setFirebaseHasDeposited(Boolean(data.hasDeposited));
+              const userHasDeposited = Boolean(
+                data.hasDeposited ||
+                (Number(data.depositCount) > 0) ||
+                data.firstDepositBonusUsed === true ||
+                data.firstDepositBonusEligible === false
+              );
+              setFirebaseHasDeposited(userHasDeposited);
               setStats({
                 vipTier: data.vipTier || 'Bronze',
                 totalWon: Number(data.totalWon) || 0,
@@ -320,21 +338,33 @@ export const FirebaseCasinoProvider = ({ children }) => {
           game.toLowerCase().includes('credit') ||
           game.toLowerCase().includes('paymongo'));
 
-      // Check if user is eligible for the First Deposit 2X Bonus
-      const currentIsFirstDeposit = mongoUser
-        ? !mongoUser.hasDeposited
-        : firebaseUser
-        ? !firebaseHasDeposited
-        : localStorage.getItem('casino_guest_has_deposited') !== 'true';
+      // Check if user is eligible for the First Deposit 2X Bonus (STRICTLY first deposit only!)
+      let currentIsFirstDeposit = false;
+      if (mongoUser) {
+        currentIsFirstDeposit = Boolean(
+          !mongoUser.hasDeposited &&
+          (Number(mongoUser.depositCount) || 0) === 0 &&
+          mongoUser.firstDepositBonusEligible !== false
+        );
+      } else if (firebaseUser) {
+        currentIsFirstDeposit = !firebaseHasDeposited;
+      } else {
+        const guestDep = localStorage.getItem('casino_guest_has_deposited') === 'true';
+        const guestCnt = Number(localStorage.getItem('casino_guest_deposit_count')) || 0;
+        currentIsFirstDeposit = !guestHasDeposited && !guestDep && guestCnt === 0;
+      }
 
       let creditedChips = numAmount;
       let appliedFirstDepositBonus = false;
 
-      // Requirement: First-time registered users receive bonus by depositing first:
-      // Every amount deposited is doubled (2X) on first deposit only!
+      // User requirement: First-time registered users receive 2X bonus on their first deposit only.
+      // Every subsequent deposit (second deposit onward): strictly 1:1, NO MORE BONUS!
       if (isDeposit && currentIsFirstDeposit) {
         creditedChips = numAmount * 2;
         appliedFirstDepositBonus = true;
+      } else {
+        creditedChips = numAmount;
+        appliedFirstDepositBonus = false;
       }
 
       // Check idempotency for deposits
@@ -391,10 +421,11 @@ export const FirebaseCasinoProvider = ({ children }) => {
             chips: newChips,
             updatedAt: new Date().toISOString(),
           };
-          if (isDeposit && currentIsFirstDeposit) {
+          if (isDeposit) {
             userUpdate.hasDeposited = true;
-            userUpdate.depositCount = 1;
+            userUpdate.depositCount = currentIsFirstDeposit ? 1 : 2;
             userUpdate.firstDepositBonusUsed = true;
+            userUpdate.firstDepositBonusEligible = false;
             setFirebaseHasDeposited(true);
           }
 
@@ -417,13 +448,17 @@ export const FirebaseCasinoProvider = ({ children }) => {
           }).catch(() => {});
         } else if (mongoUser) {
           // If authenticated with MongoDB, sync to MongoDB users collection
+          const prevCount = Number(mongoUser.depositCount) || (mongoUser.hasDeposited ? 1 : 0);
+          const newCount = isDeposit ? prevCount + 1 : prevCount;
+
           const mongoPayload = {
             userId: mongoUser.id,
             chips: newChips,
           };
-          if (isDeposit && currentIsFirstDeposit) {
+          if (isDeposit) {
             mongoPayload.hasDeposited = true;
-            mongoPayload.depositCount = (Number(mongoUser.depositCount) || 0) + 1;
+            mongoPayload.depositCount = newCount;
+            mongoPayload.firstDepositBonusEligible = false;
           }
 
           fetch('/api/auth/update-chips', {
@@ -435,9 +470,9 @@ export const FirebaseCasinoProvider = ({ children }) => {
           const updatedUser = {
             ...mongoUser,
             chips: newChips,
-            hasDeposited: isDeposit && currentIsFirstDeposit ? true : mongoUser.hasDeposited,
-            depositCount: isDeposit && currentIsFirstDeposit ? (Number(mongoUser.depositCount) || 0) + 1 : mongoUser.depositCount,
-            firstDepositBonusEligible: isDeposit && currentIsFirstDeposit ? false : mongoUser.firstDepositBonusEligible,
+            hasDeposited: isDeposit ? true : Boolean(mongoUser.hasDeposited),
+            depositCount: isDeposit ? newCount : mongoUser.depositCount,
+            firstDepositBonusEligible: isDeposit ? false : Boolean(mongoUser.firstDepositBonusEligible),
           };
           setMongoUser(updatedUser);
           try {
@@ -445,9 +480,11 @@ export const FirebaseCasinoProvider = ({ children }) => {
           } catch (_) {}
         } else {
           // If guest, record in guest demo storage
-          if (isDeposit && currentIsFirstDeposit) {
+          if (isDeposit) {
             try {
               localStorage.setItem('casino_guest_has_deposited', 'true');
+              const prevCnt = Number(localStorage.getItem('casino_guest_deposit_count')) || 0;
+              localStorage.setItem('casino_guest_deposit_count', String(prevCnt + 1));
             } catch (_) {}
             setGuestHasDeposited(true);
           }

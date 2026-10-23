@@ -502,7 +502,7 @@ const BuyTokens = () => {
                 </Typography>
               ) : (
                 <Typography variant="caption" sx={{ color: '#34d399', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 0.5, bgcolor: 'rgba(16, 185, 129, 0.12)', px: 1.5, py: 0.5, borderRadius: 2, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-                  ✨ 1:1 Exact Rate: <strong>Deposit {formatPHP(tokenAmount)}</strong> = <strong>Receive {formatPHP(tokenAmount)}</strong> chips
+                  ✨ Standard 1:1 Rate: <strong>Deposit {formatPHP(tokenAmount)}</strong> = <strong>Receive {formatPHP(tokenAmount)} Chips</strong> (Standard deposit, no bonus)
                 </Typography>
               )}
             </Box>
@@ -553,14 +553,14 @@ const BuyTokens = () => {
                   if (res?.is2xBonus) {
                     toast.success(`🎉 2X First Deposit Bonus Activated! Exactly ${formatPHP(tokenAmount * 2)} chips credited!`);
                   } else {
-                    toast.success(`Instant credit of ${formatPHP(tokenAmount)} applied!`);
+                    toast.success(`Instant deposit of ${formatPHP(tokenAmount)} chips added (1:1 standard rate, no bonus)!`);
                   }
                 }}
                 sx={{ color: '#fbbf24', fontWeight: 800, textTransform: 'none', fontSize: '0.85rem' }}
               >
                 {isFirstDepositEligible
                   ? `⚡ Instant First Deposit: Add ${formatPHP(tokenAmount)} (Get ${formatPHP(tokenAmount * 2)} with 2X Bonus)`
-                  : `⚡ Instant Demo Deposit: Add ${formatPHP(tokenAmount)} Chips Directly`}
+                  : `⚡ Instant Deposit: Add ${formatPHP(tokenAmount)} Chips Directly (1:1 Rate, No Bonus)`}
               </Button>
             </Box>
           </Box>

@@ -115,13 +115,17 @@ function mongoAuthDevPlugin() {
               }
 
               const { hash, salt } = hashPassword(cleanPassword);
-              const initialChips = 1000;
+              // First-time user must deposit first to unlock 2x bonus (starts with 0 chips)
+              const initialChips = 0;
               const doc = {
                 username: cleanUser,
                 phone: cleanPhone,
                 passwordHash: hash,
                 salt: salt,
                 chips: initialChips,
+                hasDeposited: false,
+                depositCount: 0,
+                firstDepositBonusEligible: true,
                 vipTier: 'Bronze',
                 createdAt: new Date().toISOString(),
                 lastLoginAt: new Date().toISOString(),
@@ -132,12 +136,15 @@ function mongoAuthDevPlugin() {
               return res.end(
                 JSON.stringify({
                   success: true,
-                  message: 'Registration successful! Welcome to Luxe Highroller Casino.',
+                  message: 'Registration successful! Deposit first to unlock your 2X Welcome Bonus (every amount deposit x2)!',
                   user: {
                     id: result.insertedId.toString(),
                     username: cleanUser,
                     phone: cleanPhone,
                     chips: initialChips,
+                    hasDeposited: false,
+                    depositCount: 0,
+                    firstDepositBonusEligible: true,
                     vipTier: 'Bronze',
                     createdAt: doc.createdAt,
                   },
@@ -199,6 +206,12 @@ function mongoAuthDevPlugin() {
                 { $set: { lastLoginAt: new Date().toISOString() } }
               );
 
+              const hasDeposited = Boolean(
+                user.hasDeposited || (Number(user.depositCount) > 0) || user.firstDepositBonusEligible === false
+              );
+              const depositCount = Number(user.depositCount) || (hasDeposited ? 1 : 0);
+              const firstDepositBonusEligible = !hasDeposited;
+
               return res.end(
                 JSON.stringify({
                   success: true,
@@ -208,6 +221,9 @@ function mongoAuthDevPlugin() {
                     username: user.username,
                     phone: user.phone,
                     chips: typeof user.chips === 'number' ? user.chips : Number(user.chips) || 0,
+                    hasDeposited: hasDeposited,
+                    depositCount: depositCount,
+                    firstDepositBonusEligible: firstDepositBonusEligible,
                     vipTier: user.vipTier || 'Bronze',
                     createdAt: user.createdAt,
                   },
@@ -228,7 +244,7 @@ function mongoAuthDevPlugin() {
           req.on('end', async () => {
             res.setHeader('Content-Type', 'application/json');
             try {
-              const { userId, chips } = JSON.parse(body || '{}');
+              const { userId, chips, hasDeposited, depositCount, firstDepositBonusEligible } = JSON.parse(body || '{}');
               if (!userId || typeof chips !== 'number') {
                 res.statusCode = 400;
                 return res.end(JSON.stringify({ success: false, error: 'Missing userId or chips' }));
@@ -241,13 +257,25 @@ function mongoAuthDevPlugin() {
               } catch (_) {
                 query = { _id: userId };
               }
+
+              const setPayload = {
+                chips: Math.max(0, Math.round(chips * 100) / 100),
+                updatedAt: new Date().toISOString(),
+              };
+              if (typeof hasDeposited === 'boolean') {
+                setPayload.hasDeposited = hasDeposited;
+              }
+              if (typeof depositCount === 'number') {
+                setPayload.depositCount = depositCount;
+              }
+              if (typeof firstDepositBonusEligible === 'boolean') {
+                setPayload.firstDepositBonusEligible = firstDepositBonusEligible;
+              }
+
               await users.updateOne(query, {
-                $set: {
-                  chips: Math.max(0, Math.round(chips * 100) / 100),
-                  updatedAt: new Date().toISOString(),
-                },
+                $set: setPayload,
               });
-              return res.end(JSON.stringify({ success: true, chips }));
+              return res.end(JSON.stringify({ success: true, chips, hasDeposited, depositCount }));
             } catch (err) {
               res.statusCode = 500;
               return res.end(JSON.stringify({ success: false, error: err.message }));
