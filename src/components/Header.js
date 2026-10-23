@@ -37,7 +37,7 @@ const headersData = [
 ];
 
 export default function Header({ balance }) {
-  const { firebaseUser, mongoUser, chips, signInWithGoogle, logOut, isAdmin } = useFirebaseCasino();
+  const { firebaseUser, mongoUser, chips, signInWithGoogle, logOut, isAdmin, isFirstDepositEligible } = useFirebaseCasino();
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -258,15 +258,19 @@ export default function Header({ balance }) {
             onClick={() => navigate("/Wallet/buyTokens")}
             sx={{
               display: { xs: "none", sm: "inline-flex" },
-              fontWeight: 800,
+              fontWeight: 900,
               fontSize: "0.75rem",
               borderRadius: 2,
               px: 1.2,
               py: 0.5,
               textTransform: "none",
+              background: isFirstDepositEligible
+                ? "linear-gradient(135deg, #f59e0b 0%, #10b981 100%)"
+                : undefined,
+              boxShadow: isFirstDepositEligible ? "0 0 12px rgba(245, 158, 11, 0.5)" : undefined,
             }}
           >
-            Deposit
+            {isFirstDepositEligible ? "Deposit (2X Bonus)" : "Deposit"}
           </Button>
 
           {/* Admin Console Button (Restricted exclusively to patcherx500@gmail.com) */}

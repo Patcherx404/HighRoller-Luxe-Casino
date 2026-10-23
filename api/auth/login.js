@@ -57,11 +57,17 @@ export default async function handler(req, res) {
       { $set: { lastLoginAt: new Date().toISOString() } }
     );
 
+    const hasDeposited = Boolean(user.hasDeposited);
+    const depositCount = Number(user.depositCount) || (hasDeposited ? 1 : 0);
+
     const safeUser = {
       id: user._id.toString(),
       username: user.username,
       phone: user.phone,
       chips: typeof user.chips === 'number' ? user.chips : Number(user.chips) || 0,
+      hasDeposited: hasDeposited,
+      depositCount: depositCount,
+      firstDepositBonusEligible: !hasDeposited,
       vipTier: user.vipTier || 'Bronze',
       createdAt: user.createdAt,
     };

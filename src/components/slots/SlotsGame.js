@@ -875,7 +875,7 @@ export default function SlotsGame() {
             })}
           </Grid>
 
-          {/* 🏆 Compact Winning Notification Overlay Directly Inside the Slot Machine */}
+          {/* 🏆 Small Compact Winning Notification Overlay Directly Inside the Slot Machine */}
           {lastWin > 0 && !isSpinning && (
             <Box
               sx={{
@@ -884,32 +884,35 @@ export default function SlotsGame() {
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
                 zIndex: 35,
-                width: { xs: '88%', sm: 320, md: 360 },
-                maxWidth: '92%',
-                background: 'linear-gradient(135deg, rgba(20, 8, 38, 0.95) 0%, rgba(38, 12, 64, 0.95) 100%)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: { xs: 2.5, sm: 3 },
-                border: '2px solid #facc15',
-                boxShadow: '0 0 30px rgba(250, 204, 21, 0.7), inset 0 0 15px rgba(250, 204, 21, 0.25)',
-                px: { xs: 1.5, sm: 2.2 },
-                py: { xs: 1.2, sm: 1.5 },
+                width: 'auto',
+                maxWidth: { xs: 165, sm: 190, md: 210 },
+                minWidth: { xs: 120, sm: 140 },
+                background: 'linear-gradient(135deg, rgba(20, 8, 38, 0.95) 0%, rgba(35, 10, 58, 0.95) 100%)',
+                backdropFilter: 'blur(8px)',
+                borderRadius: { xs: 1.5, sm: 2 },
+                border: '1px solid #facc15',
+                boxShadow: '0 0 14px rgba(250, 204, 21, 0.5), inset 0 0 6px rgba(250, 204, 21, 0.2)',
+                px: { xs: 0.8, sm: 1.2 },
+                py: { xs: 0.35, sm: 0.5 },
                 textAlign: 'center',
-                animation: 'compactWinOverlayPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, compactWinGlow 2.5s infinite ease-in-out',
+                animation: 'compactWinOverlayPop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, compactWinGlow 2.5s infinite ease-in-out',
                 pointerEvents: 'none',
                 userSelect: 'none',
               }}
             >
               {/* Header: e.g. ✨ WINNER! +₱10 */}
               <Typography
-                variant="h6"
                 sx={{
                   fontWeight: 900,
                   color: '#fde047',
-                  letterSpacing: 0.5,
-                  fontSize: { xs: '1.05rem', sm: '1.25rem' },
-                  textShadow: '0 0 12px rgba(253, 224, 71, 0.9), 0 0 22px rgba(234, 179, 8, 0.6)',
+                  letterSpacing: 0.2,
+                  fontSize: { xs: '0.66rem', sm: '0.74rem' },
+                  textShadow: '0 0 6px rgba(253, 224, 71, 0.8), 0 0 12px rgba(234, 179, 8, 0.5)',
                   lineHeight: 1.15,
-                  mb: 0.4,
+                  mb: 0.1,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 }}
               >
                 {winTitle ? winTitle.replace(/[^\w\s!✨👑🚀💥🌟]/g, '') : '✨ WINNER!'} +{formatPHP(lastWin)}
@@ -920,23 +923,24 @@ export default function SlotsGame() {
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 0.3,
+                  gap: 0.1,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  mt: 0.3,
                 }}
               >
-                {winningLines.slice(0, 3).map((line, idx) => (
+                {winningLines.slice(0, 1).map((line, idx) => (
                   <Box
                     key={idx}
                     sx={{
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: 0.6,
+                      gap: 0.3,
                       color: line.color || '#fbbf24',
                       fontWeight: 800,
-                      fontSize: { xs: '0.74rem', sm: '0.84rem' },
-                      textShadow: '0 1px 4px rgba(0,0,0,0.9)',
+                      fontSize: { xs: '0.54rem', sm: '0.62rem' },
+                      textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+                      lineHeight: 1.1,
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     <span>{line.name}: {line.count}x</span>
@@ -947,14 +951,14 @@ export default function SlotsGame() {
                         alt=""
                         referrerPolicy="no-referrer"
                         sx={{
-                          width: { xs: 18, sm: 22 },
-                          height: { xs: 18, sm: 22 },
+                          width: { xs: 11, sm: 13 },
+                          height: { xs: 11, sm: 13 },
                           objectFit: 'contain',
-                          filter: 'drop-shadow(0 0 6px rgba(250, 204, 21, 0.7))',
+                          filter: 'drop-shadow(0 0 3px rgba(250, 204, 21, 0.7))',
                         }}
                       />
                     ) : (
-                      <span style={{ fontSize: '1rem', lineHeight: 1 }}>{line.symbolIcon}</span>
+                      <span style={{ fontSize: '0.65rem', lineHeight: 1 }}>{line.symbolIcon}</span>
                     )}
                     <span style={{ color: '#34d399', fontWeight: 900 }}>
                       (+{formatPHP(line.win)})
@@ -962,9 +966,9 @@ export default function SlotsGame() {
                   </Box>
                 ))}
 
-                {winningLines.length > 3 && (
-                  <Typography variant="caption" sx={{ color: '#c084fc', fontWeight: 800, fontSize: '0.66rem' }}>
-                    +{winningLines.length - 3} more winning line{winningLines.length - 3 > 1 ? 's' : ''}
+                {winningLines.length > 1 && (
+                  <Typography variant="caption" sx={{ color: '#c084fc', fontWeight: 800, fontSize: '0.50rem', lineHeight: 1 }}>
+                    +{winningLines.length - 1} more line{winningLines.length - 1 > 1 ? 's' : ''}
                   </Typography>
                 )}
               </Box>

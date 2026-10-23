@@ -125,10 +125,10 @@ export default function AuthModal({ open, onClose }) {
     try {
       const res = await registerWithMongo(cleanUser, cleanPhone, regPassword);
       if (res.success) {
-        setSuccessMsg('Registration successful! ₱1,000 Welcome Bonus credited.');
+        setSuccessMsg('Registration successful! Deposit first to unlock your 2X Welcome Bonus (every amount deposit x2)!');
         setTimeout(() => {
           onClose();
-        }, 1200);
+        }, 1500);
       } else {
         setErrorMsg(res.error || 'Registration failed.');
       }
@@ -367,27 +367,27 @@ export default function AuthModal({ open, onClose }) {
         {/* ================= TAB 1: REGISTER ================= */}
         {tabIndex === 1 && (
           <Box component="form" onSubmit={handleRegisterSubmit}>
-            {/* Welcome Bonus Callout */}
+            {/* First Deposit 2X Match Bonus Callout */}
             <Paper
               elevation={0}
               sx={{
                 mb: 2,
-                p: 1.2,
+                p: 1.5,
                 borderRadius: 2,
-                bgcolor: 'rgba(234, 179, 8, 0.12)',
-                border: '1px solid #eab308',
+                bgcolor: 'rgba(234, 179, 8, 0.14)',
+                border: '1.5px solid #eab308',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 1,
+                gap: 1.2,
               }}
             >
-              <CardGiftcardIcon sx={{ color: '#fbbf24', fontSize: 24 }} />
+              <CardGiftcardIcon sx={{ color: '#fbbf24', fontSize: 30 }} />
               <Box>
-                <Typography variant="subtitle2" sx={{ color: '#fde047', fontWeight: 900, lineHeight: 1.1 }}>
-                  🎁 ₱1,000 Welcome Bonus Chips
+                <Typography variant="subtitle2" sx={{ color: '#fde047', fontWeight: 900, lineHeight: 1.15 }}>
+                  🎁 FIRST DEPOSIT 2X BONUS (100% MATCH)
                 </Typography>
-                <Typography variant="caption" sx={{ color: '#e2e8f0', fontSize: '0.68rem' }}>
-                  Register your account to receive free initial casino credits!
+                <Typography variant="caption" sx={{ color: '#f1f5f9', fontSize: '0.7rem', display: 'block', mt: 0.3 }}>
+                  To receive bonus, <strong>deposit first</strong>! Every amount you deposit is <strong>doubled (x2) on your very first deposit only</strong> (e.g. Deposit ₱100 → Get ₱200, Deposit ₱500 → Get ₱1,000)!
                 </Typography>
               </Box>
             </Paper>
@@ -586,7 +586,7 @@ export default function AuthModal({ open, onClose }) {
                 },
               }}
             >
-              {loading ? <CircularProgress size={22} color="inherit" /> : 'Register & Claim ₱1,000'}
+              {loading ? <CircularProgress size={22} color="inherit" /> : 'Register & Unlock 2X Deposit Bonus'}
             </Button>
           </Box>
         )}

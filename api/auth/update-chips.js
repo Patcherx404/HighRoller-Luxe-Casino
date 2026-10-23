@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { userId, chips } = req.body || {};
+    const { userId, chips, hasDeposited, depositCount } = req.body || {};
     if (!userId || typeof chips !== 'number') {
       return res.status(400).json({ success: false, error: 'Missing userId or chips amount' });
     }
@@ -23,13 +23,21 @@ export default async function handler(req, res) {
       query = { _id: userId };
     }
 
+    const setPayload = {
+      chips: Math.max(0, Math.round(chips * 100) / 100),
+      updatedAt: new Date().toISOString(),
+    };
+    if (typeof hasDeposited === 'boolean') {
+      setPayload.hasDeposited = hasDeposited;
+    }
+    if (typeof depositCount === 'number') {
+      setPayload.depositCount = depositCount;
+    }
+
     const result = await usersCollection.updateOne(
       query,
       {
-        $set: {
-          chips: Math.max(0, Math.round(chips * 100) / 100),
-          updatedAt: new Date().toISOString(),
-        },
+        $set: setPayload,
       }
     );
 

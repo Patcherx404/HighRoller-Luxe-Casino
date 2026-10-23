@@ -75,6 +75,23 @@ export const FirebaseCasinoProvider = ({ children }) => {
     }
   });
 
+  const [firebaseHasDeposited, setFirebaseHasDeposited] = useState(false);
+  const [guestHasDeposited, setGuestHasDeposited] = useState(() => {
+    try {
+      return localStorage.getItem('casino_guest_has_deposited') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const isFirstDepositEligible = Boolean(
+    mongoUser
+      ? !mongoUser.hasDeposited
+      : firebaseUser
+      ? !firebaseHasDeposited
+      : !guestHasDeposited
+  );
+
   const [transactions, setTransactions] = useState([]);
   const [stats, setStats] = useState({
     vipTier: 'Bronze',
@@ -197,6 +214,7 @@ export const FirebaseCasinoProvider = ({ children }) => {
               // Sync strictly to the authenticated user's private balance (defaults to 0)
               const userBalance = typeof data.chips === 'number' ? data.chips : (Number(data.chips) || 0);
               setChips(userBalance);
+              setFirebaseHasDeposited(Boolean(data.hasDeposited));
               setStats({
                 vipTier: data.vipTier || 'Bronze',
                 totalWon: Number(data.totalWon) || 0,
@@ -205,13 +223,17 @@ export const FirebaseCasinoProvider = ({ children }) => {
                 biggestWin: Number(data.biggestWin) || 0,
               });
             } else {
-              // Create user record in Firestore if not present - starts with 0 PRIVATE BALANCE
+              // Create user record in Firestore if not present - starts with 0 balance
+              // User requirement: First time registered user needs to deposit first to receive 2X bonus
               const initialData = {
                 id: user.uid,
                 email: user.email || '',
                 username: user.displayName || user.email?.split('@')[0] || 'High Roller',
                 avatar: user.photoURL || '👑',
                 chips: 0,
+                hasDeposited: false,
+                depositCount: 0,
+                firstDepositBonusEligible: true,
                 vipTier: 'Bronze',
                 totalWon: 0,
                 totalLost: 0,
@@ -220,6 +242,7 @@ export const FirebaseCasinoProvider = ({ children }) => {
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
               };
+              setFirebaseHasDeposited(false);
               setDoc(userRef, initialData).catch((err) =>
                 handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`)
               );
@@ -266,11 +289,34 @@ export const FirebaseCasinoProvider = ({ children }) => {
     }
   }, [chips, firebaseUser]);
 
-  // Real-time chip credit (1:1 exact deposit ratio, idempotent by paymentId)
+  // Real-time chip credit (Supports 2X First Deposit Match Bonus, idempotent by paymentId)
   const addChips = useCallback(
     async (amount, game, description, paymentId) => {
       const numAmount = Math.max(0, Number(amount) || 0);
       if (numAmount <= 0) return false;
+
+      const isDeposit =
+        typeof game === 'string' &&
+        (game.toLowerCase().includes('deposit') ||
+          game.toLowerCase().includes('credit') ||
+          game.toLowerCase().includes('paymongo'));
+
+      // Check if user is eligible for the First Deposit 2X Bonus
+      const currentIsFirstDeposit = mongoUser
+        ? !mongoUser.hasDeposited
+        : firebaseUser
+        ? !firebaseHasDeposited
+        : localStorage.getItem('casino_guest_has_deposited') !== 'true';
+
+      let creditedChips = numAmount;
+      let appliedFirstDepositBonus = false;
+
+      // Requirement: First-time registered users receive bonus by depositing first:
+      // Every amount deposited is doubled (2X) on first deposit only!
+      if (isDeposit && currentIsFirstDeposit) {
+        creditedChips = numAmount * 2;
+        appliedFirstDepositBonus = true;
+      }
 
       // Check idempotency for deposits
       const cleanPaymentId = paymentId ? String(paymentId) : null;
@@ -285,8 +331,10 @@ export const FirebaseCasinoProvider = ({ children }) => {
         setDoc(depositRef, {
           id: cleanPaymentId,
           amount: numAmount,
-          userId: firebaseUser?.uid || 'guest_depositor',
-          userEmail: firebaseUser?.email || 'Guest QRPH Depositor',
+          creditedChips: creditedChips,
+          firstDepositBonus: appliedFirstDepositBonus,
+          userId: mongoUser?.id || firebaseUser?.uid || 'guest_depositor',
+          userEmail: mongoUser?.username || firebaseUser?.email || 'Guest QRPH Depositor',
           paymentId: cleanPaymentId,
           paymentMethod: 'PayMongo QRPH',
           status: 'paid',
@@ -295,15 +343,18 @@ export const FirebaseCasinoProvider = ({ children }) => {
         }, { merge: true }).catch((err) => console.warn('Could not record real_deposit:', err));
       }
 
-      const isDeposit = typeof game === 'string' && game.toLowerCase().includes('deposit');
+      let updatedDescription = description;
+      if (appliedFirstDepositBonus) {
+        updatedDescription = `${description || 'Deposit'} [🎁 2X FIRST DEPOSIT BONUS: ₱${numAmount} x 2 = ₱${creditedChips} Chips Credited!]`;
+      }
 
       setChips((prevChips) => {
         const currentChips = Number(prevChips) || 0;
-        const newChips = currentChips + numAmount;
+        const newChips = currentChips + creditedChips;
 
         setStats((prevStats) => {
-          const newWon = (Number(prevStats.totalWon) || 0) + (!isDeposit ? numAmount : 0);
-          const newBiggest = Math.max(Number(prevStats.biggestWin) || 0, !isDeposit ? numAmount : 0);
+          const newWon = (Number(prevStats.totalWon) || 0) + (!isDeposit ? creditedChips : 0);
+          const newBiggest = Math.max(Number(prevStats.biggestWin) || 0, !isDeposit ? creditedChips : 0);
           const newVip = calculateVip(newChips, newWon);
 
           return {
@@ -317,11 +368,19 @@ export const FirebaseCasinoProvider = ({ children }) => {
 
         // If authenticated with Google, sync strictly to user's private Firestore doc
         if (firebaseUser) {
-          const userRef = doc(db, 'users', firebaseUser.uid);
-          updateDoc(userRef, {
+          const userUpdate = {
             chips: newChips,
             updatedAt: new Date().toISOString(),
-          }).catch((err) =>
+          };
+          if (isDeposit && currentIsFirstDeposit) {
+            userUpdate.hasDeposited = true;
+            userUpdate.depositCount = 1;
+            userUpdate.firstDepositBonusUsed = true;
+            setFirebaseHasDeposited(true);
+          }
+
+          const userRef = doc(db, 'users', firebaseUser.uid);
+          updateDoc(userRef, userUpdate).catch((err) =>
             handleFirestoreError(err, OperationType.UPDATE, `users/${firebaseUser.uid}`)
           );
 
@@ -330,26 +389,49 @@ export const FirebaseCasinoProvider = ({ children }) => {
             id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
             userId: firebaseUser.uid,
             game,
-            amount: numAmount,
+            amount: creditedChips,
+            rawAmount: numAmount,
+            firstDepositBonus: appliedFirstDepositBonus,
             balanceAfter: newChips,
-            description,
+            description: updatedDescription,
             createdAt: new Date().toISOString(),
           }).catch(() => {});
         } else if (mongoUser) {
           // If authenticated with MongoDB, sync to MongoDB users collection
+          const mongoPayload = {
+            userId: mongoUser.id,
+            chips: newChips,
+          };
+          if (isDeposit && currentIsFirstDeposit) {
+            mongoPayload.hasDeposited = true;
+            mongoPayload.depositCount = (Number(mongoUser.depositCount) || 0) + 1;
+          }
+
           fetch('/api/auth/update-chips', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: mongoUser.id, chips: newChips }),
+            body: JSON.stringify(mongoPayload),
           }).catch((err) => console.warn('Could not sync mongo chips:', err));
 
-          const updatedUser = { ...mongoUser, chips: newChips };
+          const updatedUser = {
+            ...mongoUser,
+            chips: newChips,
+            hasDeposited: isDeposit && currentIsFirstDeposit ? true : mongoUser.hasDeposited,
+            depositCount: isDeposit && currentIsFirstDeposit ? (Number(mongoUser.depositCount) || 0) + 1 : mongoUser.depositCount,
+            firstDepositBonusEligible: isDeposit && currentIsFirstDeposit ? false : mongoUser.firstDepositBonusEligible,
+          };
           setMongoUser(updatedUser);
           try {
             localStorage.setItem('mongo_casino_user', JSON.stringify(updatedUser));
           } catch (_) {}
         } else {
-          // If guest, keep in isolated guest demo storage
+          // If guest, record in guest demo storage
+          if (isDeposit && currentIsFirstDeposit) {
+            try {
+              localStorage.setItem('casino_guest_has_deposited', 'true');
+            } catch (_) {}
+            setGuestHasDeposited(true);
+          }
           try {
             localStorage.setItem('casino_public_demo_balance', String(newChips));
           } catch (e) {}
@@ -361,14 +443,16 @@ export const FirebaseCasinoProvider = ({ children }) => {
       const tx = {
         id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
         game,
-        amount: numAmount,
-        description,
+        amount: creditedChips,
+        rawAmount: numAmount,
+        firstDepositBonus: appliedFirstDepositBonus,
+        description: updatedDescription,
         timestamp: Date.now(),
       };
       setTransactions((prev) => [tx, ...prev.slice(0, 50)]);
-      return true;
+      return { success: true, credited: creditedChips, originalAmount: numAmount, is2xBonus: appliedFirstDepositBonus };
     },
-    [firebaseUser]
+    [firebaseUser, mongoUser, firebaseHasDeposited, guestHasDeposited]
   );
 
   // Real-time chip debit
@@ -625,6 +709,8 @@ export const FirebaseCasinoProvider = ({ children }) => {
         totalRealDeposits,
         cosmicJackpot,
         jackpotDepositCut: 0.40,
+        isFirstDepositEligible,
+        hasDeposited: !isFirstDepositEligible,
         chips,
         stats,
         transactions,

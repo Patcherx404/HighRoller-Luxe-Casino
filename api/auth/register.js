@@ -68,7 +68,9 @@ export default async function handler(req, res) {
 
     // 6. Hash Password and Create User
     const { hash, salt } = hashPassword(cleanPassword);
-    const initialChips = 1000; // ₱1,000 Welcome Bonus Chips
+    // User Requirement: First time registered user must deposit first to receive bonus.
+    // Every amount deposited is doubled (2X) on first deposit only!
+    const initialChips = 0; // Starts with 0; bonus activated on first deposit (deposit x2)
 
     const newUserDoc = {
       username: cleanUser,
@@ -76,6 +78,9 @@ export default async function handler(req, res) {
       passwordHash: hash,
       salt: salt,
       chips: initialChips,
+      hasDeposited: false,
+      depositCount: 0,
+      firstDepositBonusEligible: true,
       vipTier: 'Bronze',
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
@@ -88,13 +93,16 @@ export default async function handler(req, res) {
       username: cleanUser,
       phone: cleanPhone,
       chips: initialChips,
+      hasDeposited: false,
+      depositCount: 0,
+      firstDepositBonusEligible: true,
       vipTier: 'Bronze',
       createdAt: newUserDoc.createdAt,
     };
 
     return res.status(201).json({
       success: true,
-      message: 'Registration successful! Welcome to Luxe Highroller Casino.',
+      message: 'Registration successful! Deposit first to activate your 2X Welcome Bonus (first deposit x2)!',
       user: safeUser,
     });
   } catch (err) {

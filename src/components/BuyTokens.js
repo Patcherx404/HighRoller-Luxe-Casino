@@ -25,7 +25,7 @@ import { db } from "../services/firebase";
 const PRESET_AMOUNTS = [1, 50, 100, 500, 1000, 2500];
 
 const BuyTokens = () => {
-  const { addChips, firebaseUser } = useFirebaseCasino();
+  const { addChips, firebaseUser, isFirstDepositEligible } = useFirebaseCasino();
   const [tokenAmount, setTokenAmount] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
   const [qrData, setQrData] = useState(null);
@@ -75,8 +75,8 @@ const BuyTokens = () => {
           const credited = Number(checkResult.amount || qrData.amount || tokenAmount);
           const payId = checkResult.paymentId || qrData.id || `pay_${Date.now()}`;
 
-          // 1. Credit chips to user account
-          await addChipsRef.current(
+          // 1. Credit chips to user account (automatically doubles if first deposit)
+          const creditRes = await addChipsRef.current(
             credited,
             "Deposit (PayMongo)",
             `PayMongo QRPH Deposit (${formatPHP(credited)}) - ID: ${payId}`,
@@ -88,6 +88,8 @@ const BuyTokens = () => {
             await setDoc(doc(db, "real_deposits", payId), {
               id: payId,
               amount: credited,
+              creditedChips: creditRes?.is2xBonus ? credited * 2 : credited,
+              firstDepositBonus: Boolean(creditRes?.is2xBonus),
               userId: firebaseUser?.uid || "guest_depositor",
               userEmail: firebaseUser?.email || "Guest QRPH Depositor",
               paymentId: payId,
@@ -102,7 +104,11 @@ const BuyTokens = () => {
 
           setPaymentSuccess(true);
           setIsListening(false);
-          toast.success(`🎉 Payment verified! Exactly ${formatPHP(credited)} added to your balance!`);
+          if (creditRes?.is2xBonus) {
+            toast.success(`🎉 2X First Deposit Bonus Activated! Exactly ${formatPHP(credited * 2)} chips added to your balance!`);
+          } else {
+            toast.success(`🎉 Payment verified! Exactly ${formatPHP(credited)} added to your balance!`);
+          }
         }
       } catch (err) {
         console.warn("Background polling check error:", err);
@@ -265,6 +271,11 @@ const BuyTokens = () => {
                 <Typography variant="h6" sx={{ color: '#34d399', fontWeight: 900, fontFamily: 'monospace', lineHeight: 1 }}>
                   {formatPHP(qrData.amount)} PHP
                 </Typography>
+                {isFirstDepositEligible && (
+                  <Typography variant="caption" sx={{ color: '#fbbf24', fontWeight: 900, display: 'block', mt: 0.3 }}>
+                    🎁 2X BONUS: GET {formatPHP(qrData.amount * 2)} CHIPS!
+                  </Typography>
+                )}
               </Box>
             </Box>
 
@@ -363,7 +374,8 @@ const BuyTokens = () => {
               Deposit Verified & Added Automatically! 🇵🇭
             </Typography>
             <Typography variant="body1" sx={{ color: '#e2e8f0', mb: 2 }}>
-              <strong>{formatPHP(qrData ? qrData.amount : tokenAmount)}</strong> chips have been credited to your casino balance!
+              Payment of <strong>{formatPHP(qrData ? qrData.amount : tokenAmount)}</strong> received!
+              Chips have been credited to your casino balance!
             </Typography>
             <Button
               variant="contained"
@@ -384,6 +396,43 @@ const BuyTokens = () => {
         ) : (
           /* Amount Selection & Generate QR Form */
           <Box>
+            {/* First Deposit 2X Match Promotion Banner */}
+            {isFirstDepositEligible ? (
+              <Paper
+                elevation={4}
+                sx={{
+                  mb: 3,
+                  p: 2,
+                  borderRadius: 3,
+                  background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.2) 0%, rgba(16, 185, 129, 0.2) 100%)',
+                  border: '2px solid #fbbf24',
+                  textAlign: 'center',
+                  boxShadow: '0 0 25px rgba(251, 191, 36, 0.25)',
+                }}
+              >
+                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, bgcolor: '#f59e0b', color: '#000', px: 1.5, py: 0.3, borderRadius: 2, fontWeight: 900, fontSize: '0.78rem', mb: 1 }}>
+                  🎁 100% MATCH WELCOME PROMOTION
+                </Box>
+                <Typography variant="h6" sx={{ color: '#fbbf24', fontWeight: 900, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                  FIRST DEPOSIT 2X BONUS ACTIVE!
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#f8fafc', fontWeight: 700, mt: 0.5 }}>
+                  Registered players must deposit first to receive bonus: <strong>every amount you deposit is DOUBLED (x2) on your very first deposit only!</strong>
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#fde047', fontWeight: 800, display: 'block', mt: 0.5 }}>
+                  ✨ Examples: Deposit ₱50 → Get ₱100 | Deposit ₱100 → Get ₱200 | Deposit ₱500 → Get ₱1,000 | Deposit ₱1,000 → Get ₱2,000!
+                </Typography>
+              </Paper>
+            ) : (
+              <Box sx={{ mb: 2.5, textAlign: 'center' }}>
+                <Chip
+                  label="First Deposit 2X Bonus Claimed ✓ • Standard 1:1 Deposit Rate Active"
+                  size="small"
+                  sx={{ bgcolor: 'rgba(51, 65, 85, 0.7)', color: '#94a3b8', border: '1px solid #475569', fontWeight: 700 }}
+                />
+              </Box>
+            )}
+
             {/* Preset Amount Chips */}
             <Box sx={{ mb: 3 }}>
               <Typography variant="caption" sx={{ color: '#fbbf24', fontWeight: 800, display: 'block', mb: 1.2, textAlign: 'center', fontSize: '0.75rem' }}>
@@ -393,13 +442,13 @@ const BuyTokens = () => {
                 {PRESET_AMOUNTS.map((amt) => (
                   <Chip
                     key={amt}
-                    label={formatPHP(amt)}
+                    label={isFirstDepositEligible ? `${formatPHP(amt)} (Get ${formatPHP(amt * 2)})` : formatPHP(amt)}
                     clickable
                     color={tokenAmount === amt ? "warning" : "default"}
                     onClick={() => setTokenAmount(amt)}
                     sx={{
                       fontWeight: 900,
-                      fontSize: { xs: '0.82rem', sm: '0.92rem' },
+                      fontSize: { xs: '0.8rem', sm: '0.9rem' },
                       py: 2.2,
                       px: { xs: 1, sm: 1.5 },
                       bgcolor: tokenAmount === amt ? "#fbbf24" : "#0f172a",
@@ -445,11 +494,17 @@ const BuyTokens = () => {
               />
             </Box>
 
-            {/* Explicit 1:1 conversion rate notice */}
+            {/* Explicit 1:1 or 2X conversion rate notice */}
             <Box sx={{ textAlign: 'center', mb: 2 }}>
-              <Typography variant="caption" sx={{ color: '#34d399', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 0.5, bgcolor: 'rgba(16, 185, 129, 0.12)', px: 1.5, py: 0.5, borderRadius: 2, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-                ✨ 1:1 Exact Rate: <strong>Deposit {formatPHP(tokenAmount)}</strong> = <strong>Receive {formatPHP(tokenAmount)}</strong> chips
-              </Typography>
+              {isFirstDepositEligible ? (
+                <Typography variant="subtitle2" sx={{ color: '#fde047', fontWeight: 900, display: 'inline-flex', alignItems: 'center', gap: 0.8, bgcolor: 'rgba(234, 179, 8, 0.2)', px: 2, py: 0.8, borderRadius: 2, border: '1.5px solid #eab308' }}>
+                  🎁 2X FIRST DEPOSIT BONUS: <strong>Deposit {formatPHP(tokenAmount)}</strong> = <strong>RECEIVE {formatPHP(tokenAmount * 2)} CHIPS (2X MATCH)!</strong>
+                </Typography>
+              ) : (
+                <Typography variant="caption" sx={{ color: '#34d399', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 0.5, bgcolor: 'rgba(16, 185, 129, 0.12)', px: 1.5, py: 0.5, borderRadius: 2, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                  ✨ 1:1 Exact Rate: <strong>Deposit {formatPHP(tokenAmount)}</strong> = <strong>Receive {formatPHP(tokenAmount)}</strong> chips
+                </Typography>
+              )}
             </Box>
 
             {/* Generate PayMongo QR Button */}
@@ -475,7 +530,11 @@ const BuyTokens = () => {
                   },
                 }}
               >
-                {isGenerating ? "GENERATING PAYMONGO QR..." : `Generate PayMongo QRPH (${formatPHP(tokenAmount)})`}
+                {isGenerating
+                  ? "GENERATING PAYMONGO QR..."
+                  : isFirstDepositEligible
+                  ? `Generate PayMongo QRPH (${formatPHP(tokenAmount)} → Get ${formatPHP(tokenAmount * 2)} 2X)`
+                  : `Generate PayMongo QRPH (${formatPHP(tokenAmount)})`}
               </Button>
             </Box>
 
@@ -489,13 +548,19 @@ const BuyTokens = () => {
               <Button
                 size="small"
                 variant="text"
-                onClick={() => {
-                  addChips(tokenAmount, "Instant Credit", `Instant Credit (${formatPHP(tokenAmount)})`);
-                  toast.success(`Instant credit of ${formatPHP(tokenAmount)} applied!`);
+                onClick={async () => {
+                  const res = await addChips(tokenAmount, "Instant Credit", `Instant Credit (${formatPHP(tokenAmount)})`);
+                  if (res?.is2xBonus) {
+                    toast.success(`🎉 2X First Deposit Bonus Activated! Exactly ${formatPHP(tokenAmount * 2)} chips credited!`);
+                  } else {
+                    toast.success(`Instant credit of ${formatPHP(tokenAmount)} applied!`);
+                  }
                 }}
                 sx={{ color: '#fbbf24', fontWeight: 800, textTransform: 'none', fontSize: '0.85rem' }}
               >
-                ⚡ Instant Demo Deposit: Add {formatPHP(tokenAmount)} Chips Directly
+                {isFirstDepositEligible
+                  ? `⚡ Instant First Deposit: Add ${formatPHP(tokenAmount)} (Get ${formatPHP(tokenAmount * 2)} with 2X Bonus)`
+                  : `⚡ Instant Demo Deposit: Add ${formatPHP(tokenAmount)} Chips Directly`}
               </Button>
             </Box>
           </Box>

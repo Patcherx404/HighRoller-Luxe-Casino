@@ -55,7 +55,13 @@ const Header = () => {
 };
 
 const Wallet = () => {
-  const { chips, firebaseUser } = useFirebaseCasino();
+  const { chips, firebaseUser, mongoUser, isFirstDepositEligible } = useFirebaseCasino();
+
+  const userAccountLabel = mongoUser
+    ? `${mongoUser.username} (${mongoUser.phone || 'Member'})`
+    : firebaseUser
+    ? firebaseUser.email
+    : null;
 
   return (
     <Box sx={{ width: '100%', maxWidth: 700, mx: 'auto', px: { xs: 1, sm: 2, md: 3 }, py: { xs: 1, sm: 2 } }}>
@@ -73,17 +79,22 @@ const Wallet = () => {
         }}
       >
         <Typography variant="overline" sx={{ color: '#94a3b8', fontWeight: 800, letterSpacing: 1.5 }}>
-          {firebaseUser ? 'PRIVATE ACCOUNT BALANCE • 🇵🇭' : 'PUBLIC DEMO BALANCE • 🇵🇭'}
+          {userAccountLabel ? 'PRIVATE ACCOUNT BALANCE • 🇵🇭' : 'PUBLIC DEMO BALANCE • 🇵🇭'}
         </Typography>
         <Typography variant="h4" sx={{ fontWeight: 900, color: '#fbbf24', fontFamily: 'monospace', my: 0.5 }}>
           {formatPHP(chips)}
         </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mt: 0.5 }}>
-          <Typography variant="caption" sx={{ color: firebaseUser ? '#34d399' : '#38bdf8', fontWeight: 700 }}>
-            {firebaseUser
-              ? `Synced exclusively to ${firebaseUser.email} in Firestore`
-              : 'Guest Demo Mode • Sign in to save and access your private balance'}
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.5, mt: 0.5 }}>
+          <Typography variant="caption" sx={{ color: userAccountLabel ? '#34d399' : '#38bdf8', fontWeight: 700 }}>
+            {userAccountLabel
+              ? `Logged in as ${userAccountLabel}`
+              : 'Guest Demo Mode • Register / Sign in to save balance & claim 2X bonus'}
           </Typography>
+          {isFirstDepositEligible && (
+            <Typography variant="caption" sx={{ color: '#fbbf24', fontWeight: 900, bgcolor: 'rgba(251, 191, 36, 0.15)', px: 1.5, py: 0.3, borderRadius: 1.5, border: '1px solid rgba(251, 191, 36, 0.4)' }}>
+              🎁 First Deposit 2X Bonus Active: Deposit first to double your chips (x2 on first deposit)!
+            </Typography>
+          )}
         </Box>
       </Paper>
 
