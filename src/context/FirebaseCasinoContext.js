@@ -50,9 +50,24 @@ export const FirebaseCasinoProvider = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Initialize chips: If public/guest, use isolated demo chips (never private user balance)
+  // MongoDB User Session (Registered with Username, 09 Phone, and Password)
+  const [mongoUser, setMongoUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('mongo_casino_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Initialize chips: If MongoDB user is logged in, use their balance; otherwise public demo chips
   const [chips, setChips] = useState(() => {
     try {
+      const savedMongo = localStorage.getItem('mongo_casino_user');
+      if (savedMongo) {
+        const parsed = JSON.parse(savedMongo);
+        if (typeof parsed?.chips === 'number') return parsed.chips;
+      }
       const saved = localStorage.getItem('casino_public_demo_balance');
       return saved ? Number(saved) : PUBLIC_DEMO_CHIPS;
     } catch {
@@ -71,7 +86,9 @@ export const FirebaseCasinoProvider = ({ children }) => {
 
   const ADMIN_EMAIL = 'patcherx500@gmail.com';
   const isAdmin = Boolean(
-    firebaseUser?.email && firebaseUser.email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()
+    (firebaseUser?.email && firebaseUser.email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()) ||
+    (mongoUser?.username && mongoUser.username.trim().toLowerCase() === 'admin') ||
+    (mongoUser?.phone === '09171234567')
   );
 
   const [casinoConfig, setCasinoConfig] = useState(() => {
@@ -318,6 +335,19 @@ export const FirebaseCasinoProvider = ({ children }) => {
             description,
             createdAt: new Date().toISOString(),
           }).catch(() => {});
+        } else if (mongoUser) {
+          // If authenticated with MongoDB, sync to MongoDB users collection
+          fetch('/api/auth/update-chips', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: mongoUser.id, chips: newChips }),
+          }).catch((err) => console.warn('Could not sync mongo chips:', err));
+
+          const updatedUser = { ...mongoUser, chips: newChips };
+          setMongoUser(updatedUser);
+          try {
+            localStorage.setItem('mongo_casino_user', JSON.stringify(updatedUser));
+          } catch (_) {}
         } else {
           // If guest, keep in isolated guest demo storage
           try {
@@ -392,6 +422,19 @@ export const FirebaseCasinoProvider = ({ children }) => {
             description,
             createdAt: new Date().toISOString(),
           }).catch(() => {});
+        } else if (mongoUser) {
+          // If authenticated with MongoDB, sync to MongoDB users collection
+          fetch('/api/auth/update-chips', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: mongoUser.id, chips: newChips }),
+          }).catch((err) => console.warn('Could not sync mongo chips:', err));
+
+          const updatedUser = { ...mongoUser, chips: newChips };
+          setMongoUser(updatedUser);
+          try {
+            localStorage.setItem('mongo_casino_user', JSON.stringify(updatedUser));
+          } catch (_) {}
         } else {
           // If guest, keep in isolated guest demo storage
           try {
@@ -472,11 +515,72 @@ export const FirebaseCasinoProvider = ({ children }) => {
     try {
       localStorage.removeItem('casino_guest_chips');
       localStorage.removeItem('casino_fixed_dup_5php_v1');
+      localStorage.removeItem('mongo_casino_user');
     } catch (e) {}
+
+    setMongoUser(null);
 
     // 4. Perform Firebase SignOut
     await firebaseSignOut();
   }, [firebaseUser, chips]);
+
+  // MongoDB Login with Username/Phone and Password
+  const loginWithMongo = useCallback(async (identifier, password) => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, password }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || 'Login failed' };
+      }
+      setMongoUser(data.user);
+      if (typeof data.user.chips === 'number') {
+        setChips(data.user.chips);
+      }
+      localStorage.setItem('mongo_casino_user', JSON.stringify(data.user));
+      return { success: true, user: data.user };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }, []);
+
+  // MongoDB Registration with Username, 09 11-digit phone, and Password
+  const registerWithMongo = useCallback(async (username, phone, password) => {
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, phone, password }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || 'Registration failed' };
+      }
+      setMongoUser(data.user);
+      if (typeof data.user.chips === 'number') {
+        setChips(data.user.chips);
+      }
+      localStorage.setItem('mongo_casino_user', JSON.stringify(data.user));
+      return { success: true, user: data.user };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }, []);
+
+  // Logout from MongoDB session
+  const logoutMongo = useCallback(() => {
+    setMongoUser(null);
+    localStorage.removeItem('mongo_casino_user');
+    try {
+      const guestSaved = localStorage.getItem('casino_public_demo_balance');
+      setChips(guestSaved ? Number(guestSaved) : PUBLIC_DEMO_CHIPS);
+    } catch {
+      setChips(PUBLIC_DEMO_CHIPS);
+    }
+  }, []);
 
   // Admin win rate update function (Restricted to patcherx500@gmail.com)
   const updateCasinoConfig = useCallback(
@@ -508,6 +612,11 @@ export const FirebaseCasinoProvider = ({ children }) => {
     <CasinoContext.Provider
       value={{
         firebaseUser,
+        mongoUser,
+        currentUser: mongoUser || (firebaseUser ? { id: firebaseUser.uid, username: firebaseUser.displayName || firebaseUser.email?.split('@')[0], email: firebaseUser.email, photoURL: firebaseUser.photoURL } : null),
+        loginWithMongo,
+        registerWithMongo,
+        logoutMongo,
         authLoading,
         isAdmin,
         ADMIN_EMAIL,

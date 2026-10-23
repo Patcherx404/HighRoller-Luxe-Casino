@@ -22,8 +22,10 @@ import StyleIcon from "@mui/icons-material/Style";
 import PieChartIcon from "@mui/icons-material/PieChart";
 import HomeIcon from "@mui/icons-material/Home";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
+import PersonIcon from "@mui/icons-material/Person";
 import { useFirebaseCasino } from "../context/FirebaseCasinoContext";
 import { formatPHP } from "../utils/formatCurrency";
+import AuthModal from "./auth/AuthModal";
 
 const headersData = [
   { label: "Lobby Floor", href: "/games", icon: <HomeIcon /> },
@@ -35,14 +37,53 @@ const headersData = [
 ];
 
 export default function Header({ balance }) {
-  const { firebaseUser, chips, signInWithGoogle, logOut, isAdmin } = useFirebaseCasino();
+  const { firebaseUser, mongoUser, chips, signInWithGoogle, logOut, isAdmin } = useFirebaseCasino();
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const handleDrawerOpen = () => setDrawerOpen(true);
   const handleDrawerClose = () => setDrawerOpen(false);
 
   const LoginButton = () => {
+    // 1. Logged in via MongoDB
+    if (mongoUser) {
+      return (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Avatar
+            sx={{
+              width: { xs: 28, sm: 32 },
+              height: { xs: 28, sm: 32 },
+              background: "linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)",
+              fontSize: "0.85rem",
+              fontWeight: 900,
+              border: "1.5px solid #c084fc",
+              color: "#fff",
+            }}
+          >
+            {mongoUser.username?.[0]?.toUpperCase() || "U"}
+          </Avatar>
+          <Box sx={{ display: { xs: "none", md: "block" }, textAlign: "left", ml: 0.5 }}>
+            <Typography variant="caption" sx={{ color: "#fff", fontWeight: 800, display: "block", lineHeight: 1.1 }}>
+              {mongoUser.username}
+            </Typography>
+            <Typography variant="caption" sx={{ color: "#34d399", fontSize: "0.65rem", fontWeight: 700 }}>
+              {mongoUser.phone || "VIP Member"}
+            </Typography>
+          </Box>
+          <IconButton
+            size="small"
+            title="Sign Out"
+            onClick={logOut}
+            sx={{ color: "#ef4444", p: 0.5 }}
+          >
+            <LogoutIcon sx={{ fontSize: { xs: "1rem", sm: "1.2rem" } }} />
+          </IconButton>
+        </Box>
+      );
+    }
+
+    // 2. Logged in via Google
     if (firebaseUser) {
       return (
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -80,34 +121,33 @@ export default function Header({ balance }) {
       );
     }
 
+    // 3. Not Logged In: Open MongoDB Login & 09 Registration Modal
     return (
       <Button
         variant="contained"
-        onClick={signInWithGoogle}
+        onClick={() => setAuthModalOpen(true)}
         sx={{
-          background: "#ffffff",
-          color: "#1f2937",
-          fontWeight: 800,
+          background: "linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)",
+          color: "#ffffff",
+          fontWeight: 900,
           textTransform: "none",
           borderRadius: 2,
-          px: { xs: 1, sm: 1.5 },
+          border: "1.5px solid #c084fc",
+          boxShadow: "0 0 14px rgba(168, 85, 247, 0.45)",
+          px: { xs: 1.2, sm: 1.8 },
           py: 0.5,
-          minWidth: { xs: 68, sm: 84 },
-          boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
-          "&:hover": { background: "#f3f4f6" },
+          minWidth: { xs: 74, sm: 88 },
+          "&:hover": {
+            background: "linear-gradient(135deg, #9333ea 0%, #6b21a8 100%)",
+          },
           display: "flex",
           alignItems: "center",
-          gap: 0.5,
+          gap: 0.6,
         }}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24">
-          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-        </svg>
-        <Typography variant="button" sx={{ fontWeight: 800, fontSize: { xs: "0.7rem", sm: "0.8rem" } }}>
-          Login
+        <PersonIcon sx={{ fontSize: { xs: 16, sm: 18 } }} />
+        <Typography variant="button" sx={{ fontWeight: 900, fontSize: { xs: "0.72rem", sm: "0.82rem" } }}>
+          Sign In
         </Typography>
       </Button>
     );
@@ -371,7 +411,7 @@ export default function Header({ balance }) {
 
         {/* Sign in / Sign out button in drawer */}
         <Box sx={{ mt: "auto", pt: 1 }}>
-          {firebaseUser ? (
+          {(mongoUser || firebaseUser) ? (
             <Button
               fullWidth
               variant="outlined"
@@ -383,29 +423,32 @@ export default function Header({ balance }) {
               }}
               sx={{ borderRadius: 2, fontWeight: 800 }}
             >
-              Sign Out
+              Sign Out ({mongoUser?.username || firebaseUser?.displayName || 'Player'})
             </Button>
           ) : (
             <Button
               fullWidth
               variant="contained"
               onClick={() => {
-                signInWithGoogle();
+                setAuthModalOpen(true);
                 handleDrawerClose();
               }}
               sx={{
-                bgcolor: "#fff",
-                color: "#1e293b",
-                fontWeight: 800,
+                background: "linear-gradient(135deg, #a855f7 0%, #7e22ce 100%)",
+                color: "#fff",
+                fontWeight: 900,
                 borderRadius: 2,
-                "&:hover": { bgcolor: "#f1f5f9" },
+                "&:hover": { background: "linear-gradient(135deg, #9333ea 0%, #6b21a8 100%)" },
               }}
             >
-              Sign In with Google
+              Sign In / Register
             </Button>
           )}
         </Box>
       </Drawer>
+
+      {/* MongoDB Login & 09 Phone Registration Modal */}
+      <AuthModal open={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </AppBar>
   );
 }
