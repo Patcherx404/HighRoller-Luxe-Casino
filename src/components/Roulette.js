@@ -48,17 +48,17 @@ const Ruleta = ({
     const handleResize = () => {
       const screenW = window.innerWidth;
       const screenH = window.innerHeight;
-      // Tailor scale for mobile screens so wheel and controls fit within viewport without scrolling
-      if (screenW < 360 || screenH < 680) {
-        setScale(0.68);
-      } else if (screenW < 420 || screenH < 750) {
-        setScale(0.76);
-      } else if (screenW < 520 || screenH < 850) {
-        setScale(0.85);
+      // Tailor scale for Playtech layout on mobile and PC screens (Big but fits table)
+      if (screenW < 360 || screenH < 620) {
+        setScale(0.55);
+      } else if (screenW < 420 || screenH < 700) {
+        setScale(0.62);
       } else if (screenW < 768) {
-        setScale(0.92);
+        setScale(0.70);
+      } else if (screenH < 750) {
+        setScale(0.78);
       } else {
-        setScale(1);
+        setScale(0.85);
       }
     };
     handleResize();
@@ -79,58 +79,64 @@ const Ruleta = ({
         justifyContent: 'center',
         alignItems: 'center',
         padding: '0',
+        width: '100%',
         maxWidth: '100%',
         overflow: 'visible',
         height: `${340 * scale}px`,
         position: 'relative',
+        zIndex: 10,
+        margin: '1px auto',
       }}
     >
+      <style>{`
+        .full-circle-wheel-wrapper > div {
+          width: 340px !important;
+          max-width: 340px !important;
+          height: 340px !important;
+          max-height: 340px !important;
+          border-radius: 50% !important;
+          margin: 0 auto !important;
+          position: relative !important;
+          overflow: visible !important;
+        }
+        .full-circle-wheel-wrapper canvas {
+          border-radius: 50% !important;
+          box-shadow: 0 0 25px rgba(0, 0, 0, 0.95), 0 0 15px rgba(245, 158, 11, 0.3) !important;
+        }
+      `}</style>
       <div
+        className="full-circle-wheel-wrapper"
         style={{
           transform: `scale(${scale})`,
           transformOrigin: 'center center',
           transition: 'transform 0.2s ease',
           position: 'relative',
-          width: '320px',
-          height: '320px',
+          width: '340px',
+          height: '340px',
+          borderRadius: '50%',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
+          boxShadow: '0 12px 30px rgba(0,0,0,0.9), inset 0 0 20px rgba(0,0,0,0.85), 0 0 20px rgba(202, 138, 4, 0.4)',
+          background: 'radial-gradient(circle, #5c2710 0%, #3d1708 65%, #200a02 100%)',
+          border: '7px solid #a16207',
         }}
       >
-        {/* Authentic Casino Pointer Needle at 12 o'clock */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '-6px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 35,
-            width: 0,
-            height: 0,
-            borderLeft: '11px solid transparent',
-            borderRight: '11px solid transparent',
-            borderTop: '18px solid #fbbf24',
-            filter: 'drop-shadow(0 3px 5px rgba(0,0,0,0.85)) drop-shadow(0 0 6px #eab308)',
-            pointerEvents: 'none',
-          }}
-        />
-
-        {/* 37-Pocket European Wheel */}
+        {/* 37-Pocket European Wheel (Playtech Luxury Style with authentic pointer) */}
         <Wheel
           mustStartSpinning={mustSpin}
           prizeNumber={targetIndex}
           data={wheelData}
-          outerBorderColor="#eab308"
-          outerBorderWidth={8}
+          outerBorderColor="#ca8a04"
+          outerBorderWidth={7}
           innerRadius={36}
-          innerBorderColor="#ca8a04"
+          innerBorderColor="#854d0e"
           innerBorderWidth={4}
           radiusLineColor="#ca8a04"
           radiusLineWidth={2}
-          fontSize={13}
+          fontSize={12}
           perpendicularText={true}
-          textDistance={84}
+          textDistance={82}
           spinDuration={0.8}
           onStopSpinning={() => {
             if (onSpinComplete) {
