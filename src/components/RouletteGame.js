@@ -11,6 +11,9 @@ import {
 } from "@mui/material";
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import VolumeOffIcon from '@mui/icons-material/VolumeOff';
+import CasinoIcon from '@mui/icons-material/Casino';
+import WhatshotIcon from '@mui/icons-material/Whatshot';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { ToastContainer, toast } from "react-toastify";
 import { useFirebaseCasino } from "../context/FirebaseCasinoContext";
 import { formatPHP } from "../utils/formatCurrency";
@@ -28,6 +31,7 @@ export default function RouletteGame() {
   const [mustSpin, setMustSpin] = useState(false);
   const [winningNumber, setWinningNumber] = useState(0);
   const [lastWin, setLastWin] = useState(null);
+  const [mobileTab, setMobileTab] = useState("outside"); // "outside" | "numbers" | "fun"
   const [history, setHistory] = useState([
     { num: 32, color: 'red' },
     { num: 15, color: 'black' },
@@ -80,10 +84,49 @@ export default function RouletteGame() {
     setBets(doubled);
   };
 
+  // Fun Bet 1: Lucky Random Number (35:1 straight up)
+  const handleLuckyBet = () => {
+    if (mustSpin) return;
+    if (chips < totalBet + selectedChip) {
+      toast.warn("Not enough chips for Lucky Bet!");
+      return;
+    }
+    const randNum = Math.floor(Math.random() * 37);
+    const key = `num_${randNum}`;
+    rouletteAudio.playChipClink();
+    setBets((prev) => ({
+      ...prev,
+      [key]: (prev[key] || 0) + selectedChip,
+    }));
+    toast.success(`🎲 Lucky Bet placed on #${randNum} (${getNumberColor(randNum).toUpperCase()})! Potential payout: ${formatPHP(selectedChip * 36)}!`);
+  };
+
+  // Fun Bet 2: Hot Numbers (bets on last 3 winning numbers)
+  const handleHotNumbersBet = () => {
+    if (mustSpin) return;
+    const hotNums = history.slice(0, 3).map((h) => h.num);
+    const cost = hotNums.length * selectedChip;
+    if (chips < totalBet + cost) {
+      toast.warn(`Not enough chips for Hot Numbers (${formatPHP(cost)} needed)!`);
+      return;
+    }
+    rouletteAudio.playChipClink();
+    setBets((prev) => {
+      const next = { ...prev };
+      hotNums.forEach((n) => {
+        const k = `num_${n}`;
+        next[k] = (next[k] || 0) + selectedChip;
+      });
+      return next;
+    });
+    toast.info(`🔥 Bets placed on Hot Numbers: ${hotNums.join(", ")}!`);
+  };
+
   const handleSpinClick = async () => {
     if (mustSpin) return;
     if (totalBet === 0) {
-      toast.info("Please place at least one bet on the roulette board.");
+      rouletteAudio.playChipClink();
+      toast.info("👉 Tap any pocket or color below to place your chips, then tap SPIN in the center!");
       return;
     }
 
@@ -93,14 +136,13 @@ export default function RouletteGame() {
       `European Roulette Bet (${formatPHP(totalBet)})`
     );
     if (!deducted) {
-      toast.error("Failed to deduct chips from balance.");
+      toast.error("Failed to deduct chips from balance. Please deposit or adjust bet.");
       return;
     }
 
     setLastWin(null);
 
-    // Accurate Roulette Win Rate Engine:
-    // Respects casinoConfig.rouletteWinRate (Default: 36% authentic house edge)
+    // Accurate Roulette Win Rate Engine (Casino Config)
     const targetWinRate = Math.max(1, Math.min(100, Number(casinoConfig?.rouletteWinRate ?? 36)));
     const willWin = (Math.random() * 100) < targetWinRate;
 
@@ -136,8 +178,7 @@ export default function RouletteGame() {
     if (willWin && winningPockets.length > 0) {
       finalNumber = winningPockets[Math.floor(Math.random() * winningPockets.length)];
     } else if (!willWin && losingPockets.length > 0) {
-      // Authentic Casino Near-Miss:
-      // In 45% of losing spins, if player placed number bets, land on an adjacent wheel pocket!
+      // Near-miss algorithm: pick adjacent pocket if player bet straight numbers
       const playerNumBets = Object.keys(bets).filter((k) => k.startsWith("num_") && bets[k] > 0);
       let nearMissFound = false;
 
@@ -174,7 +215,7 @@ export default function RouletteGame() {
     const winColor = getNumberColor(winNum);
 
     // Update history
-    setHistory((prev) => [{ num: winNum, color: winColor }, ...prev.slice(0, 9)]);
+    setHistory((prev) => [{ num: winNum, color: winColor }, ...prev.slice(0, 7)]);
 
     // Evaluate payouts
     let payout = 0;
@@ -217,7 +258,7 @@ export default function RouletteGame() {
       setTimeout(() => {
         rouletteAudio.playWinFanfare(payout >= totalBet * 5);
       }, 200);
-      toast.success(`🎉 Winning Number ${winNum} ${winColor.toUpperCase()}! You won ${formatPHP(payout)}!`);
+      toast.success(`🎉 Winning Pocket ${winNum} ${winColor.toUpperCase()}! You won ${formatPHP(payout)}!`);
     } else {
       setLastWin(0);
       setTimeout(() => {
@@ -227,383 +268,688 @@ export default function RouletteGame() {
     }
   };
 
+  // 12 columns x 3 rows matrix for European numbers
+  const numberMatrixRows = [
+    [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
+    [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+    [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
+  ];
+
   return (
-    <Box sx={{ width: "100%", maxWidth: 1050, mx: "auto", px: { xs: 0.5, sm: 2, md: 3 }, py: { xs: 1, md: 2 }, color: "#fff" }}>
-      {/* Header Banner */}
+    <Box
+      sx={{
+        width: "100%",
+        maxWidth: 1100,
+        mx: "auto",
+        px: { xs: 0.8, sm: 2, md: 3 },
+        py: { xs: 0.5, md: 2 },
+        color: "#fff",
+        // USER REQUIREMENT: Fit in mobile with NO SCROLLING DOWN
+        height: { xs: "calc(100dvh - 60px)", md: "auto" },
+        maxHeight: { xs: "calc(100vh - 60px)", md: "none" },
+        overflowY: { xs: "hidden", md: "visible" },
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+      }}
+    >
+      {/* 1. TOP COMPACT HEADER (Height ~38px on mobile) */}
       <Paper
-        elevation={6}
+        elevation={4}
         sx={{
-          p: { xs: 1.5, sm: 2.5 },
-          mb: 2,
-          borderRadius: 3,
+          px: { xs: 1.2, sm: 2 },
+          py: { xs: 0.6, sm: 1 },
+          borderRadius: 2.5,
           background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
-          border: "2px solid #f59e0b",
+          border: "1.5px solid #f59e0b",
           display: "flex",
-          flexWrap: "wrap",
           justifyContent: "space-between",
           alignItems: "center",
-          gap: 1.5,
+          gap: 1,
+          flexShrink: 0,
         }}
       >
-        <Box>
-          <Typography variant="overline" sx={{ color: "#fbbf24", fontWeight: 900, letterSpacing: 1.5, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}>
-            Philippine Peso Tables • 🇵🇭
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Typography
+            variant="subtitle2"
+            sx={{
+              fontWeight: 900,
+              color: "#fbbf24",
+              fontSize: { xs: "0.78rem", sm: "1rem" },
+              letterSpacing: 0.5,
+              lineHeight: 1,
+            }}
+          >
+            ROULETTE 37 🇵🇭
           </Typography>
-          <Typography variant="h5" sx={{ fontWeight: 900, color: "#fff", fontSize: { xs: "1.2rem", sm: "1.6rem" } }}>
-            European Roulette 37
-          </Typography>
-        </Box>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
-          {/* History Strip */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}>
-            <Typography variant="caption" sx={{ color: "#94a3b8", fontWeight: 800, mr: 0.5 }}>
-              RECENT:
-            </Typography>
-            {history.slice(0, 6).map((h, i) => (
-              <Box
-                key={i}
-                sx={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: "50%",
-                  background: h.color === "red" ? "#dc2626" : h.color === "green" ? "#16a34a" : "#111827",
-                  border: "1.5px solid #fbbf24",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 900,
-                  fontSize: "0.7rem",
-                }}
-              >
-                {h.num}
-              </Box>
-            ))}
-          </Box>
-
-          {/* Sound Mute / Unmute Button */}
           <IconButton
             size="small"
             onClick={handleToggleMute}
-            title={isMuted ? "Unmute Roulette Audio" : "Mute Roulette Audio"}
+            title={isMuted ? "Unmute Audio" : "Mute Audio"}
             sx={{
               color: isMuted ? "#94a3b8" : "#fbbf24",
-              border: isMuted ? "1.5px solid #475569" : "1.5px solid #fbbf24",
-              bgcolor: isMuted ? "rgba(15, 23, 42, 0.6)" : "rgba(245, 158, 11, 0.15)",
-              p: 0.8,
-              transition: "all 0.15s ease",
-              "&:hover": { bgcolor: "rgba(245, 158, 11, 0.3)", transform: "scale(1.05)" },
+              p: 0.4,
+              border: "1px solid #475569",
+              bgcolor: "rgba(15, 23, 42, 0.7)",
             }}
           >
-            {isMuted ? <VolumeOffIcon fontSize="small" /> : <VolumeUpIcon fontSize="small" />}
+            {isMuted ? <VolumeOffIcon sx={{ fontSize: 15 }} /> : <VolumeUpIcon sx={{ fontSize: 15 }} />}
           </IconButton>
+        </Box>
+
+        {/* History Dots Strip */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Typography variant="caption" sx={{ color: "#94a3b8", fontWeight: 800, fontSize: "0.62rem", display: { xs: "none", sm: "block" } }}>
+            RECENT:
+          </Typography>
+          {history.slice(0, 5).map((h, i) => (
+            <Box
+              key={i}
+              sx={{
+                width: { xs: 20, sm: 24 },
+                height: { xs: 20, sm: 24 },
+                borderRadius: "50%",
+                background: h.color === "red" ? "#dc2626" : h.color === "green" ? "#16a34a" : "#111827",
+                border: "1px solid #fbbf24",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 900,
+                fontSize: { xs: "0.62rem", sm: "0.72rem" },
+                color: "#fff",
+              }}
+            >
+              {h.num}
+            </Box>
+          ))}
+        </Box>
+
+        {/* Balance Display */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0.6,
+            bgcolor: "rgba(245, 158, 11, 0.15)",
+            border: "1px solid #f59e0b",
+            px: 1.2,
+            py: 0.3,
+            borderRadius: 2,
+          }}
+        >
+          <Typography variant="caption" sx={{ color: "#94a3b8", fontWeight: 800, fontSize: "0.6rem" }}>
+            BAL
+          </Typography>
+          <Typography variant="subtitle2" sx={{ color: "#34d399", fontWeight: 900, fontFamily: "monospace", fontSize: { xs: "0.78rem", sm: "0.9rem" }, lineHeight: 1 }}>
+            {formatPHP(chips)}
+          </Typography>
         </Box>
       </Paper>
 
-      {/* Scaled Wheel Section for Phone */}
-      <Paper
-        elevation={8}
+      {/* 2. WHEEL ARENA WITH INTEGRATED CENTER SPIN BUTTON (Flex Grow, Centered) */}
+      <Box
         sx={{
-          p: { xs: 1.5, sm: 3 },
-          mb: 2,
-          borderRadius: 3,
-          background: "radial-gradient(ellipse at center, #064e3b 0%, #022c22 80%)",
-          border: "2px solid #10b981",
-          textAlign: "center",
-          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          py: { xs: 0.5, md: 1 },
+          flexShrink: 0,
         }}
       >
         <Ruleta
           winningNumber={winningNumber}
           mustSpin={mustSpin}
           onSpinComplete={onWheelStop}
+          onSpinClick={handleSpinClick}
+          totalBet={totalBet}
+          lastWin={lastWin}
+          chips={chips}
         />
 
-        {lastWin !== null && (
-          <Box sx={{ mt: 1.5 }}>
-            {lastWin > 0 ? (
+        {/* Micro Result Ticker */}
+        <Box sx={{ mt: 0.5, textAlign: "center", minHeight: 22 }}>
+          {lastWin !== null ? (
+            lastWin > 0 ? (
               <Chip
-                label={`WINNER: +${formatPHP(lastWin)}`}
+                size="small"
+                label={`🎉 Pocket ${winningNumber} (${getNumberColor(winningNumber).toUpperCase()}) • WON +${formatPHP(lastWin)}!`}
                 sx={{
-                  px: 2,
-                  py: 2,
-                  fontSize: { xs: "0.95rem", sm: "1.1rem" },
-                  fontWeight: 900,
                   bgcolor: "#16a34a",
                   color: "#fff",
-                  border: "2px solid #fbbf24",
+                  fontWeight: 900,
+                  fontSize: "0.75rem",
+                  border: "1.5px solid #fbbf24",
+                  height: 24,
                 }}
               />
             ) : (
               <Chip
-                label={`Result: ${winningNumber} (${getNumberColor(winningNumber).toUpperCase()})`}
+                size="small"
+                label={`Result: Pocket ${winningNumber} (${getNumberColor(winningNumber).toUpperCase()})`}
                 sx={{
-                  px: 1.5,
-                  py: 1.5,
-                  fontSize: { xs: "0.8rem", sm: "0.9rem" },
-                  fontWeight: 800,
                   bgcolor: "#334155",
                   color: "#e2e8f0",
+                  fontWeight: 800,
+                  fontSize: "0.7rem",
+                  height: 22,
                 }}
               />
-            )}
-          </Box>
-        )}
-      </Paper>
+            )
+          ) : totalBet > 0 ? (
+            <Typography variant="caption" sx={{ color: "#fbbf24", fontWeight: 900, fontSize: "0.72rem" }}>
+              ✨ Total Bet: <strong>{formatPHP(totalBet)}</strong> • Tap Center Gold Hub to <strong>SPIN</strong>
+            </Typography>
+          ) : (
+            <Typography variant="caption" sx={{ color: "#94a3b8", fontWeight: 700, fontSize: "0.68rem" }}>
+              Place bets below • Tap Center to SPIN
+            </Typography>
+          )}
+        </Box>
+      </Box>
 
-      {/* Betting Felt Board (Mobile Touch-Scrollable) */}
+      {/* 3. TOUCH BETTING BOARD (Optimized for Mobile No-Scroll + Desktop Expansive) */}
       <Paper
-        elevation={8}
+        elevation={6}
         sx={{
-          p: { xs: 1.5, sm: 2.5 },
+          p: { xs: 0.8, sm: 1.5, md: 2 },
           borderRadius: 3,
-          background: "#064e3b",
-          border: "2px solid #f59e0b",
+          background: "linear-gradient(180deg, #064e3b 0%, #022c22 100%)",
+          border: "2px solid #10b981",
+          flexShrink: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          overflow: "hidden",
         }}
       >
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-          <Typography variant="caption" sx={{ color: "#fbbf24", fontWeight: 900, fontSize: { xs: "0.7rem", sm: "0.8rem" } }}>
-            TAP POCKETS TO BET (Active: {formatPHP(selectedChip)})
-          </Typography>
-          <Typography variant="caption" sx={{ color: "#86efac", display: { xs: "block", sm: "none" }, fontSize: "0.65rem" }}>
-            👉 Swipe table
-          </Typography>
-        </Box>
-
-        {/* Horizontal scroll container for the 37-number felt */}
+        {/* Mobile Tab Switcher: OUTSIDE BETS | ALL NUMBERS | FUN BETS */}
         <Box
           sx={{
-            overflowX: "auto",
-            pb: 1,
-            "-webkit-overflow-scrolling": "touch",
-            scrollbarWidth: "thin",
+            display: { xs: "flex", md: "none" },
+            gap: 0.5,
+            mb: 0.8,
+            p: 0.3,
+            bgcolor: "#022c22",
+            borderRadius: 2,
+            border: "1px solid #047857",
           }}
         >
-          <Box sx={{ minWidth: 540, display: "flex", gap: 0.5, mb: 1 }}>
+          <Button
+            fullWidth
+            size="small"
+            onClick={() => setMobileTab("outside")}
+            sx={{
+              py: 0.4,
+              fontSize: "0.72rem",
+              fontWeight: 900,
+              borderRadius: 1.5,
+              textTransform: "none",
+              color: mobileTab === "outside" ? "#000" : "#94a3b8",
+              bgcolor: mobileTab === "outside" ? "#fbbf24" : "transparent",
+              "&:hover": { bgcolor: mobileTab === "outside" ? "#f59e0b" : "rgba(255,255,255,0.05)" },
+            }}
+          >
+            Outside (1:1 & 2:1)
+          </Button>
+
+          <Button
+            fullWidth
+            size="small"
+            onClick={() => setMobileTab("numbers")}
+            sx={{
+              py: 0.4,
+              fontSize: "0.72rem",
+              fontWeight: 900,
+              borderRadius: 1.5,
+              textTransform: "none",
+              color: mobileTab === "numbers" ? "#000" : "#94a3b8",
+              bgcolor: mobileTab === "numbers" ? "#fbbf24" : "transparent",
+              "&:hover": { bgcolor: mobileTab === "numbers" ? "#f59e0b" : "rgba(255,255,255,0.05)" },
+            }}
+          >
+            Numbers (0-36)
+          </Button>
+
+          <Button
+            fullWidth
+            size="small"
+            onClick={() => setMobileTab("fun")}
+            sx={{
+              py: 0.4,
+              fontSize: "0.72rem",
+              fontWeight: 900,
+              borderRadius: 1.5,
+              textTransform: "none",
+              color: mobileTab === "fun" ? "#000" : "#94a3b8",
+              bgcolor: mobileTab === "fun" ? "#fbbf24" : "transparent",
+              "&:hover": { bgcolor: mobileTab === "fun" ? "#f59e0b" : "rgba(255,255,255,0.05)" },
+            }}
+          >
+            ⭐ Fun Bets
+          </Button>
+        </Box>
+
+        {/* --- VIEW A: OUTSIDE BETS (Red, Black, Even, Odd, Low, High, Dozens) --- */}
+        <Box sx={{ display: { xs: mobileTab === "outside" ? "block" : "none", md: "block" } }}>
+          {/* Row 1: Primary Colors (Red / Black) */}
+          <Grid container spacing={0.6} sx={{ mb: 0.6 }}>
+            <Grid item xs={6}>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={() => handlePlaceBet("red")}
+                sx={{
+                  py: { xs: 0.9, sm: 1.1 },
+                  background: "linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)",
+                  border: bets["red"] ? "2.5px solid #fbbf24" : "1px solid #f87171",
+                  color: "#fff",
+                  fontWeight: 950,
+                  fontSize: { xs: "0.85rem", sm: "0.95rem" },
+                  borderRadius: 2,
+                  boxShadow: bets["red"] ? "0 0 12px rgba(239, 68, 68, 0.7)" : undefined,
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                🔴 RED (1:1)
+                {bets["red"] && (
+                  <Box sx={{ bgcolor: "#fbbf24", color: "#000", px: 0.8, py: 0.1, borderRadius: 1.5, fontSize: "0.68rem", fontWeight: 900 }}>
+                    {formatPHP(bets["red"])}
+                  </Box>
+                )}
+              </Button>
+            </Grid>
+
+            <Grid item xs={6}>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={() => handlePlaceBet("black")}
+                sx={{
+                  py: { xs: 0.9, sm: 1.1 },
+                  background: "linear-gradient(135deg, #334155 0%, #0f172a 100%)",
+                  border: bets["black"] ? "2.5px solid #fbbf24" : "1px solid #64748b",
+                  color: "#fff",
+                  fontWeight: 950,
+                  fontSize: { xs: "0.85rem", sm: "0.95rem" },
+                  borderRadius: 2,
+                  boxShadow: bets["black"] ? "0 0 12px rgba(251, 191, 36, 0.5)" : undefined,
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                ⚫ BLACK (1:1)
+                {bets["black"] && (
+                  <Box sx={{ bgcolor: "#fbbf24", color: "#000", px: 0.8, py: 0.1, borderRadius: 1.5, fontSize: "0.68rem", fontWeight: 900 }}>
+                    {formatPHP(bets["black"])}
+                  </Box>
+                )}
+              </Button>
+            </Grid>
+          </Grid>
+
+          {/* Row 2: Even-Money Bets (Low 1-18, Even, Odd, High 19-36) */}
+          <Grid container spacing={0.6} sx={{ mb: 0.6 }}>
+            {[
+              { key: "low", label: "1-18" },
+              { key: "even", label: "EVEN" },
+              { key: "odd", label: "ODD" },
+              { key: "high", label: "19-36" },
+            ].map((b) => (
+              <Grid item xs={3} key={b.key}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={() => handlePlaceBet(b.key)}
+                  sx={{
+                    py: { xs: 0.6, sm: 0.8 },
+                    background: "#0f172a",
+                    border: bets[b.key] ? "2px solid #fbbf24" : "1px solid #334155",
+                    color: "#e2e8f0",
+                    fontWeight: 900,
+                    fontSize: { xs: "0.72rem", sm: "0.82rem" },
+                    borderRadius: 1.5,
+                  }}
+                >
+                  {b.label}
+                  {bets[b.key] && (
+                    <Box sx={{ ml: 0.5, bgcolor: "#fbbf24", color: "#000", px: 0.5, borderRadius: 1, fontSize: "0.58rem" }}>
+                      {formatPHP(bets[b.key])}
+                    </Box>
+                  )}
+                </Button>
+              </Grid>
+            ))}
+          </Grid>
+
+          {/* Row 3: Dozens (1st 12, 2nd 12, 3rd 12 • 2:1) */}
+          <Grid container spacing={0.6}>
+            {[
+              { key: "doz1", label: "1st 12 (1-12) 2:1" },
+              { key: "doz2", label: "2nd 12 (13-24) 2:1" },
+              { key: "doz3", label: "3rd 12 (25-36) 2:1" },
+            ].map((d) => (
+              <Grid item xs={4} key={d.key}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  onClick={() => handlePlaceBet(d.key)}
+                  sx={{
+                    py: { xs: 0.5, sm: 0.7 },
+                    fontSize: { xs: "0.68rem", sm: "0.78rem" },
+                    borderColor: bets[d.key] ? "#fbbf24" : "#10b981",
+                    borderWidth: 1.5,
+                    bgcolor: bets[d.key] ? "rgba(251, 191, 36, 0.25)" : "rgba(0,0,0,0.35)",
+                    color: "#fff",
+                    fontWeight: 900,
+                    borderRadius: 1.5,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {d.label} {bets[d.key] && `(${formatPHP(bets[d.key])})`}
+                </Button>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+
+        {/* --- VIEW B: NUMBERS 0-36 (European 37-Pocket Matrix) --- */}
+        <Box
+          sx={{
+            display: { xs: mobileTab === "numbers" ? "block" : "none", md: "block" },
+            mt: { xs: 0, md: 1 },
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              gap: 0.4,
+              overflowX: "auto",
+              pb: 0.5,
+              "-webkit-overflow-scrolling": "touch",
+            }}
+          >
             {/* Zero pocket */}
             <Button
               variant="contained"
               onClick={() => handlePlaceBet("num_0")}
               sx={{
-                minWidth: 46,
-                minHeight: 110,
+                minWidth: { xs: 34, sm: 40 },
+                width: { xs: 34, sm: 40 },
+                minHeight: { xs: 80, sm: 94 },
                 background: "#16a34a",
-                border: bets["num_0"] ? "2px solid #fbbf24" : "1px solid #ffffff40",
-                fontWeight: 900,
-                fontSize: "1.1rem",
+                border: bets["num_0"] ? "2px solid #fbbf24" : "1px solid #4ade80",
+                fontWeight: 950,
+                fontSize: { xs: "0.95rem", sm: "1.1rem" },
                 position: "relative",
+                borderRadius: 1.5,
+                p: 0,
                 "&:hover": { bgcolor: "#15803d" },
               }}
             >
               0
               {bets["num_0"] && (
-                <Box sx={{ position: "absolute", bottom: 4, bgcolor: "#fbbf24", color: "#000", px: 0.5, borderRadius: 1.5, fontSize: "0.6rem", fontWeight: 900 }}>
+                <Box sx={{ position: "absolute", bottom: 2, bgcolor: "#fbbf24", color: "#000", px: 0.4, borderRadius: 1, fontSize: "0.55rem", fontWeight: 900 }}>
                   {formatPHP(bets["num_0"])}
                 </Box>
               )}
             </Button>
 
-            {/* Numbers 1 to 36 Grid */}
-            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 0.5, flexGrow: 1 }}>
-              {Array.from({ length: 36 }, (_, i) => i + 1).map((num) => {
-                const color = getNumberColor(num);
-                const key = `num_${num}`;
-                const hasBet = bets[key];
-                return (
-                  <Button
-                    key={num}
-                    onClick={() => handlePlaceBet(key)}
-                    sx={{
-                      minWidth: 36,
-                      height: 34,
-                      p: 0,
-                      background: color === "red" ? "#dc2626" : "#111827",
-                      color: "#fff",
-                      fontWeight: 900,
-                      fontSize: "0.85rem",
-                      border: hasBet ? "2px solid #fbbf24" : "1px solid #4b5563",
-                      position: "relative",
-                      "&:hover": {
-                        filter: "brightness(1.2)",
-                        background: color === "red" ? "#ef4444" : "#1f2937",
-                      },
-                    }}
-                  >
-                    {num}
-                    {hasBet && (
-                      <Box sx={{ position: "absolute", top: -5, right: -3, bgcolor: "#fbbf24", color: "#000", px: 0.4, borderRadius: 1, fontSize: "0.55rem", fontWeight: 900 }}>
-                        {formatPHP(hasBet)}
-                      </Box>
-                    )}
-                  </Button>
-                );
-              })}
+            {/* 3 Rows x 12 Cols Grid */}
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.4, flexGrow: 1 }}>
+              {numberMatrixRows.map((row, rIdx) => (
+                <Box key={rIdx} sx={{ display: "flex", gap: 0.4 }}>
+                  {row.map((num) => {
+                    const color = getNumberColor(num);
+                    const key = `num_${num}`;
+                    const hasBet = bets[key];
+                    return (
+                      <Button
+                        key={num}
+                        onClick={() => handlePlaceBet(key)}
+                        sx={{
+                          flex: 1,
+                          minWidth: { xs: 23, sm: 28 },
+                          height: { xs: 24, sm: 28 },
+                          p: 0,
+                          background: color === "red" ? "#dc2626" : "#0f172a",
+                          color: "#fff",
+                          fontWeight: 900,
+                          fontSize: { xs: "0.72rem", sm: "0.82rem" },
+                          border: hasBet ? "2px solid #fbbf24" : "1px solid #475569",
+                          borderRadius: 1,
+                          position: "relative",
+                          "&:hover": {
+                            filter: "brightness(1.2)",
+                            background: color === "red" ? "#ef4444" : "#1e293b",
+                          },
+                        }}
+                      >
+                        {num}
+                        {hasBet && (
+                          <Box sx={{ position: "absolute", top: -4, right: -2, bgcolor: "#fbbf24", color: "#000", px: 0.3, borderRadius: 0.8, fontSize: "0.5rem", fontWeight: 900, lineHeight: 1 }}>
+                            {formatPHP(hasBet)}
+                          </Box>
+                        )}
+                      </Button>
+                    );
+                  })}
+                </Box>
+              ))}
             </Box>
           </Box>
         </Box>
 
-        {/* Dozens */}
-        <Grid container spacing={0.8} sx={{ mb: 1 }}>
-          {[
-            { key: "doz1", label: "1st 12 (1-12) • 2:1" },
-            { key: "doz2", label: "2nd 12 (13-24) • 2:1" },
-            { key: "doz3", label: "3rd 12 (25-36) • 2:1" },
-          ].map((d) => (
-            <Grid item xs={4} key={d.key}>
-              <Button
-                fullWidth
-                variant="outlined"
-                onClick={() => handlePlaceBet(d.key)}
-                sx={{
-                  py: 0.8,
-                  fontSize: { xs: "0.68rem", sm: "0.8rem" },
-                  borderColor: bets[d.key] ? "#fbbf24" : "#10b981",
-                  borderWidth: 1.5,
-                  bgcolor: bets[d.key] ? "rgba(251, 191, 36, 0.2)" : "rgba(0,0,0,0.3)",
-                  color: "#fff",
-                  fontWeight: 900,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {d.label} {bets[d.key] && `(${formatPHP(bets[d.key])})`}
-              </Button>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* Outside Bets (Even-Money: Low, Even, Red, Black, Odd, High) */}
-        <Grid container spacing={0.8} sx={{ mb: 2 }}>
-          {[
-            { key: "low", label: "1-18", color: "#334155" },
-            { key: "even", label: "EVEN", color: "#334155" },
-            { key: "red", label: "RED", color: "#dc2626" },
-            { key: "black", label: "BLACK", color: "#111827" },
-            { key: "odd", label: "ODD", color: "#334155" },
-            { key: "high", label: "19-36", color: "#334155" },
-          ].map((b) => (
-            <Grid item xs={4} sm={2} key={b.key}>
+        {/* --- VIEW C: FUN BETS (Mobile Tab / Quick Actions) --- */}
+        <Box sx={{ display: { xs: mobileTab === "fun" ? "block" : "none", md: "none" } }}>
+          <Grid container spacing={0.8}>
+            <Grid item xs={6}>
               <Button
                 fullWidth
                 variant="contained"
-                onClick={() => handlePlaceBet(b.key)}
+                onClick={handleLuckyBet}
+                startIcon={<CasinoIcon />}
                 sx={{
-                  py: 0.9,
-                  background: b.color,
-                  border: bets[b.key] ? "2px solid #fbbf24" : "1px solid #64748b",
+                  py: 1,
+                  background: "linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%)",
+                  border: "1.5px solid #a78bfa",
                   color: "#fff",
                   fontWeight: 900,
-                  fontSize: { xs: "0.75rem", sm: "0.85rem" },
-                  "&:hover": { filter: "brightness(1.2)" },
+                  fontSize: "0.75rem",
+                  borderRadius: 2,
                 }}
               >
-                {b.label}
-                {bets[b.key] && (
-                  <Box sx={{ ml: 0.5, bgcolor: "#fbbf24", color: "#000", px: 0.5, borderRadius: 1, fontSize: "0.6rem" }}>
-                    {formatPHP(bets[b.key])}
-                  </Box>
-                )}
+                🎲 Lucky Number (35:1)
               </Button>
             </Grid>
-          ))}
-        </Grid>
 
-        {/* Console & Chip Selector */}
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: { xs: "column", sm: "row" },
-            justifyContent: "space-between",
-            alignItems: { xs: "stretch", sm: "center" },
-            gap: 1.5,
-            pt: 1.5,
-            borderTop: "1px solid #10b981",
-          }}
-        >
-          {/* Chip Denominations in Philippine Peso */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, flexWrap: "wrap", justifyContent: { xs: "center", sm: "flex-start" } }}>
-            <Typography variant="caption" sx={{ color: "#a7f3d0", fontWeight: 800, mr: 0.5, fontSize: "0.7rem" }}>
-              CHIP:
-            </Typography>
-            {CHIP_DENOMINATIONS.map((amt) => (
-              <Chip
+            <Grid item xs={6}>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={handleHotNumbersBet}
+                startIcon={<WhatshotIcon />}
+                sx={{
+                  py: 1,
+                  background: "linear-gradient(135deg, #ea580c 0%, #9a3412 100%)",
+                  border: "1.5px solid #fb923c",
+                  color: "#fff",
+                  fontWeight: 900,
+                  fontSize: "0.75rem",
+                  borderRadius: 2,
+                }}
+              >
+                🔥 Bet Hot Numbers
+              </Button>
+            </Grid>
+
+            <Grid item xs={6}>
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={() => handlePlaceBet("red")}
+                sx={{
+                  py: 0.8,
+                  borderColor: "#ef4444",
+                  color: "#fca5a5",
+                  fontWeight: 900,
+                  fontSize: "0.72rem",
+                  bgcolor: "rgba(239, 68, 68, 0.15)",
+                }}
+              >
+                🔴 All Red (+1:1)
+              </Button>
+            </Grid>
+
+            <Grid item xs={6}>
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={() => handlePlaceBet("black")}
+                sx={{
+                  py: 0.8,
+                  borderColor: "#94a3b8",
+                  color: "#e2e8f0",
+                  fontWeight: 900,
+                  fontSize: "0.72rem",
+                  bgcolor: "rgba(51, 65, 85, 0.3)",
+                }}
+              >
+                ⚫ All Black (+1:1)
+              </Button>
+            </Grid>
+          </Grid>
+        </Box>
+      </Paper>
+
+      {/* 4. BOTTOM ACTION DOCK (Chips Selector, Clear, 2X, Total Stake) */}
+      <Paper
+        elevation={4}
+        sx={{
+          px: { xs: 1, sm: 2 },
+          py: { xs: 0.6, sm: 1 },
+          borderRadius: 2.5,
+          background: "#0f172a",
+          border: "1px solid #334155",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 1,
+          flexShrink: 0,
+        }}
+      >
+        {/* Chip Denominations in Philippine Peso */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.4, sm: 0.6 }, overflowX: "auto" }}>
+          {CHIP_DENOMINATIONS.map((amt) => {
+            const isSelected = selectedChip === amt;
+            return (
+              <Box
                 key={amt}
-                label={formatPHP(amt)}
-                clickable
-                color={selectedChip === amt ? "warning" : "default"}
                 onClick={() => {
                   setSelectedChip(amt);
                   rouletteAudio.playChipClink();
                 }}
                 sx={{
+                  width: { xs: 34, sm: 40 },
+                  height: { xs: 34, sm: 40 },
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
                   fontWeight: 900,
-                  height: 28,
-                  fontSize: "0.72rem",
-                  bgcolor: selectedChip === amt ? "#fbbf24" : "#1e293b",
-                  color: selectedChip === amt ? "#000" : "#fff",
-                  border: "1px solid #475569",
-                }}
-              />
-            ))}
-          </Box>
-
-          {/* Action buttons & Total Stake */}
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-            <Box sx={{ textAlign: "left" }}>
-              <Typography variant="caption" sx={{ color: "#a7f3d0", fontWeight: 800, display: "block", fontSize: "0.65rem" }}>
-                TOTAL STAKE
-              </Typography>
-              <Typography variant="subtitle1" sx={{ color: "#fbbf24", fontWeight: 900, fontFamily: "monospace", lineHeight: 1 }}>
-                {formatPHP(totalBet)}
-              </Typography>
-            </Box>
-
-            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-              <Button
-                variant="outlined"
-                color="error"
-                size="small"
-                onClick={handleClearBets}
-                disabled={mustSpin || totalBet === 0}
-                sx={{ fontWeight: 800, minWidth: 50, py: 0.6, fontSize: "0.75rem" }}
-              >
-                Clear
-              </Button>
-              <Button
-                variant="outlined"
-                color="warning"
-                size="small"
-                onClick={handleDoubleBets}
-                disabled={mustSpin || totalBet === 0}
-                sx={{ fontWeight: 800, minWidth: 50, py: 0.6, fontSize: "0.75rem" }}
-              >
-                2x
-              </Button>
-
-              <Button
-                variant="contained"
-                disabled={mustSpin || totalBet === 0 || chips < totalBet}
-                onClick={handleSpinClick}
-                sx={{
-                  px: { xs: 3, sm: 4 },
-                  py: 0.8,
-                  fontSize: { xs: "0.95rem", sm: "1rem" },
-                  fontWeight: 900,
-                  background: "linear-gradient(45deg, #f59e0b, #fbbf24)",
-                  color: "#000",
-                  borderRadius: 2.5,
-                  boxShadow: "0 0 15px rgba(245, 158, 11, 0.4)",
-                  "&:hover": {
-                    background: "linear-gradient(45deg, #d97706, #f59e0b)",
-                  },
+                  fontSize: { xs: "0.62rem", sm: "0.72rem" },
+                  fontFamily: "monospace",
+                  background: isSelected
+                    ? "radial-gradient(circle at 35% 35%, #fef08a 0%, #f59e0b 50%, #b45309 100%)"
+                    : "radial-gradient(circle at 35% 35%, #334155 0%, #1e293b 60%, #0f172a 100%)",
+                  color: isSelected ? "#000" : "#fff",
+                  border: isSelected ? "2.5px solid #fef08a" : "1.5px dashed #64748b",
+                  boxShadow: isSelected ? "0 0 12px rgba(245, 158, 11, 0.8)" : "0 2px 4px rgba(0,0,0,0.5)",
+                  transform: isSelected ? "scale(1.08)" : "scale(1)",
+                  transition: "all 0.15s ease",
+                  userSelect: "none",
+                  flexShrink: 0,
                 }}
               >
-                {mustSpin ? "SPINNING" : "SPIN"}
-              </Button>
-            </Box>
-          </Box>
+                ₱{amt}
+              </Box>
+            );
+          })}
+        </Box>
+
+        {/* Action Controls & Total Stake */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.6, sm: 1 }, flexShrink: 0 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleClearBets}
+            disabled={mustSpin || totalBet === 0}
+            sx={{
+              fontWeight: 800,
+              minWidth: { xs: 42, sm: 54 },
+              px: { xs: 0.8, sm: 1.5 },
+              py: 0.5,
+              fontSize: { xs: "0.68rem", sm: "0.75rem" },
+              borderColor: "#ef4444",
+              color: "#fca5a5",
+              borderRadius: 1.5,
+            }}
+          >
+            Clear
+          </Button>
+
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleDoubleBets}
+            disabled={mustSpin || totalBet === 0}
+            sx={{
+              fontWeight: 800,
+              minWidth: { xs: 36, sm: 48 },
+              px: { xs: 0.8, sm: 1.5 },
+              py: 0.5,
+              fontSize: { xs: "0.68rem", sm: "0.75rem" },
+              borderColor: "#f59e0b",
+              color: "#fde047",
+              borderRadius: 1.5,
+            }}
+          >
+            2x
+          </Button>
+
+          {/* Desktop Only Extra SPIN button (Mobile already has Spin inside the wheel) */}
+          <Button
+            variant="contained"
+            disabled={mustSpin || totalBet === 0 || chips < totalBet}
+            onClick={handleSpinClick}
+            sx={{
+              display: { xs: "none", md: "inline-flex" },
+              px: 3,
+              py: 0.6,
+              fontSize: "0.9rem",
+              fontWeight: 900,
+              background: "linear-gradient(45deg, #f59e0b, #fbbf24)",
+              color: "#000",
+              borderRadius: 2,
+              boxShadow: "0 0 15px rgba(245, 158, 11, 0.4)",
+              "&:hover": {
+                background: "linear-gradient(45deg, #d97706, #f59e0b)",
+              },
+            }}
+          >
+            {mustSpin ? "SPINNING" : "SPIN (₱" + totalBet + ")"}
+          </Button>
         </Box>
       </Paper>
-      <ToastContainer theme="dark" position="top-right" autoClose={3000} />
+
+      <ToastContainer theme="dark" position="top-right" autoClose={2500} />
     </Box>
   );
 }

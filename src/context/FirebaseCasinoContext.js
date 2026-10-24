@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   auth,
   db,
@@ -113,11 +113,15 @@ export const FirebaseCasinoProvider = ({ children }) => {
     biggestWin: 0,
   });
 
+  const mongoUserRef = useRef(mongoUser);
+  mongoUserRef.current = mongoUser;
+
   const ADMIN_EMAIL = 'patcherx500@gmail.com';
+  // If MongoDB user is active, ONLY mongoUser's role determines admin; never leak Google admin
   const isAdmin = Boolean(
-    (firebaseUser?.email && firebaseUser.email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()) ||
-    (mongoUser?.username && mongoUser.username.trim().toLowerCase() === 'admin') ||
-    (mongoUser?.phone === '09171234567')
+    mongoUser
+      ? (mongoUser.username?.trim().toLowerCase() === 'admin' || mongoUser.phone === '09171234567')
+      : (firebaseUser?.email && firebaseUser.email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase())
   );
 
   const [casinoConfig, setCasinoConfig] = useState(() => {
@@ -240,6 +244,10 @@ export const FirebaseCasinoProvider = ({ children }) => {
         unsubUserDoc = onSnapshot(
           userRef,
           (docSnap) => {
+            // If user is currently using a MongoDB session, do NOT overwrite their MongoDB chips or stats!
+            if (localStorage.getItem('mongo_casino_user')) {
+              return;
+            }
             if (docSnap.exists()) {
               const data = docSnap.data();
               // Sync strictly to the authenticated user's private balance (defaults to 0)
@@ -415,8 +423,42 @@ export const FirebaseCasinoProvider = ({ children }) => {
           };
         });
 
-        // If authenticated with Google, sync strictly to user's private Firestore doc
-        if (firebaseUser) {
+        const activeMongo = mongoUserRef.current || mongoUser;
+        if (activeMongo) {
+          // If authenticated with MongoDB, sync to MongoDB users collection
+          const prevCount = Number(activeMongo.depositCount) || (activeMongo.hasDeposited ? 1 : 0);
+          const newCount = isDeposit ? prevCount + 1 : prevCount;
+
+          const mongoPayload = {
+            userId: activeMongo.id,
+            chips: newChips,
+          };
+          if (isDeposit) {
+            mongoPayload.hasDeposited = true;
+            mongoPayload.depositCount = newCount;
+            mongoPayload.firstDepositBonusEligible = false;
+          }
+
+          fetch('/api/auth/update-chips', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(mongoPayload),
+          }).catch((err) => console.warn('Could not sync mongo chips:', err));
+
+          const updatedUser = {
+            ...activeMongo,
+            chips: newChips,
+            hasDeposited: isDeposit ? true : Boolean(activeMongo.hasDeposited),
+            depositCount: isDeposit ? newCount : activeMongo.depositCount,
+            firstDepositBonusEligible: isDeposit ? false : Boolean(activeMongo.firstDepositBonusEligible),
+          };
+          mongoUserRef.current = updatedUser;
+          setMongoUser(updatedUser);
+          try {
+            localStorage.setItem('mongo_casino_user', JSON.stringify(updatedUser));
+          } catch (_) {}
+        } else if (firebaseUser) {
+          // If authenticated with Google, sync strictly to user's private Firestore doc
           const userUpdate = {
             chips: newChips,
             updatedAt: new Date().toISOString(),
@@ -446,38 +488,6 @@ export const FirebaseCasinoProvider = ({ children }) => {
             description: updatedDescription,
             createdAt: new Date().toISOString(),
           }).catch(() => {});
-        } else if (mongoUser) {
-          // If authenticated with MongoDB, sync to MongoDB users collection
-          const prevCount = Number(mongoUser.depositCount) || (mongoUser.hasDeposited ? 1 : 0);
-          const newCount = isDeposit ? prevCount + 1 : prevCount;
-
-          const mongoPayload = {
-            userId: mongoUser.id,
-            chips: newChips,
-          };
-          if (isDeposit) {
-            mongoPayload.hasDeposited = true;
-            mongoPayload.depositCount = newCount;
-            mongoPayload.firstDepositBonusEligible = false;
-          }
-
-          fetch('/api/auth/update-chips', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(mongoPayload),
-          }).catch((err) => console.warn('Could not sync mongo chips:', err));
-
-          const updatedUser = {
-            ...mongoUser,
-            chips: newChips,
-            hasDeposited: isDeposit ? true : Boolean(mongoUser.hasDeposited),
-            depositCount: isDeposit ? newCount : mongoUser.depositCount,
-            firstDepositBonusEligible: isDeposit ? false : Boolean(mongoUser.firstDepositBonusEligible),
-          };
-          setMongoUser(updatedUser);
-          try {
-            localStorage.setItem('mongo_casino_user', JSON.stringify(updatedUser));
-          } catch (_) {}
         } else {
           // If guest, record in guest demo storage
           if (isDeposit) {
@@ -542,8 +552,23 @@ export const FirebaseCasinoProvider = ({ children }) => {
           };
         });
 
-        // If authenticated with Google, sync strictly to user's private Firestore doc
-        if (firebaseUser) {
+        const activeMongo = mongoUserRef.current || mongoUser;
+        if (activeMongo) {
+          // If authenticated with MongoDB, sync strictly to this MongoDB user's collection
+          fetch('/api/auth/update-chips', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: activeMongo.id, chips: newChips }),
+          }).catch((err) => console.warn('Could not sync mongo chips:', err));
+
+          const updatedUser = { ...activeMongo, chips: newChips };
+          mongoUserRef.current = updatedUser;
+          setMongoUser(updatedUser);
+          try {
+            localStorage.setItem('mongo_casino_user', JSON.stringify(updatedUser));
+          } catch (_) {}
+        } else if (firebaseUser) {
+          // If authenticated with Google, sync strictly to user's private Firestore doc
           const userRef = doc(db, 'users', firebaseUser.uid);
           updateDoc(userRef, {
             chips: newChips,
@@ -562,19 +587,6 @@ export const FirebaseCasinoProvider = ({ children }) => {
             description,
             createdAt: new Date().toISOString(),
           }).catch(() => {});
-        } else if (mongoUser) {
-          // If authenticated with MongoDB, sync to MongoDB users collection
-          fetch('/api/auth/update-chips', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: mongoUser.id, chips: newChips }),
-          }).catch((err) => console.warn('Could not sync mongo chips:', err));
-
-          const updatedUser = { ...mongoUser, chips: newChips };
-          setMongoUser(updatedUser);
-          try {
-            localStorage.setItem('mongo_casino_user', JSON.stringify(updatedUser));
-          } catch (_) {}
         } else {
           // If guest, keep in isolated guest demo storage
           try {
@@ -598,7 +610,7 @@ export const FirebaseCasinoProvider = ({ children }) => {
 
       return success;
     },
-    [firebaseUser]
+    [firebaseUser, mongoUser]
   );
 
   // Manual or automatic balance correction sync
@@ -667,6 +679,12 @@ export const FirebaseCasinoProvider = ({ children }) => {
   // MongoDB Login with Username/Phone and Password
   const loginWithMongo = useCallback(async (identifier, password) => {
     try {
+      // Disconnect Firebase session to prevent Google admin session leakage
+      try {
+        await firebaseSignOut();
+      } catch (_) {}
+      setFirebaseUser(null);
+
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -676,6 +694,7 @@ export const FirebaseCasinoProvider = ({ children }) => {
       if (!res.ok || !data.success) {
         return { success: false, error: data.error || 'Login failed' };
       }
+      mongoUserRef.current = data.user;
       setMongoUser(data.user);
       if (typeof data.user.chips === 'number') {
         setChips(data.user.chips);
@@ -690,6 +709,11 @@ export const FirebaseCasinoProvider = ({ children }) => {
   // MongoDB Registration with Username, 09 11-digit phone, and Password
   const registerWithMongo = useCallback(async (username, phone, password) => {
     try {
+      try {
+        await firebaseSignOut();
+      } catch (_) {}
+      setFirebaseUser(null);
+
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -699,6 +723,7 @@ export const FirebaseCasinoProvider = ({ children }) => {
       if (!res.ok || !data.success) {
         return { success: false, error: data.error || 'Registration failed' };
       }
+      mongoUserRef.current = data.user;
       setMongoUser(data.user);
       if (typeof data.user.chips === 'number') {
         setChips(data.user.chips);
@@ -712,6 +737,7 @@ export const FirebaseCasinoProvider = ({ children }) => {
 
   // Logout from MongoDB session
   const logoutMongo = useCallback(() => {
+    mongoUserRef.current = null;
     setMongoUser(null);
     localStorage.removeItem('mongo_casino_user');
     try {
@@ -763,6 +789,16 @@ export const FirebaseCasinoProvider = ({ children }) => {
     [isAdmin, firebaseUser, mongoUser]
   );
 
+  // Google Sign-in: Clears MongoDB session first to avoid mixed identities
+  const handleGoogleSignIn = useCallback(async () => {
+    mongoUserRef.current = null;
+    setMongoUser(null);
+    try {
+      localStorage.removeItem('mongo_casino_user');
+    } catch (_) {}
+    return await signInWithGoogle();
+  }, []);
+
   return (
     <CasinoContext.Provider
       value={{
@@ -782,13 +818,14 @@ export const FirebaseCasinoProvider = ({ children }) => {
         jackpotDepositCut: 0.40,
         isFirstDepositEligible,
         hasDeposited: !isFirstDepositEligible,
+        depositCount: mongoUser?.depositCount || (firebaseHasDeposited || guestHasDeposited ? 1 : 0),
         chips,
         stats,
         transactions,
         addChips,
         deductChips,
         syncBalance,
-        signInWithGoogle,
+        signInWithGoogle: handleGoogleSignIn,
         logOut,
       }}
     >
